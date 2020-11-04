@@ -1,0 +1,66 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-appconfig
+spec:
+  components:
+    - componentName: example-component
+      parameterValues:
+        - name: instance-name
+          value: example-appconfig-workload1
+        - name: image
+          value: wordpress:php7.2
+      traits:
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: HorizontalPodAutoscalerTrait
+            metadata:
+              name:  example-hpatrait
+            spec:
+              minReplicas: 1
+              maxReplicas: 5
+              metrics:
+                - type: Resource
+                  resource:
+                    name: memory
+                    targetAverageUtilization: 60
+                - type: Resource
+                  resource:
+                    name: cpu
+                    targetAverageUtilization: 50
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: ManualScalerTrait
+            metadata:
+              name: example-appconfig-trait
+            spec:
+              replicaCount: 2
+#        - trait:
+#            apiVersion: core.oam.dev/v1alpha2
+#            kind: VolumeTrait
+#            metadata:
+#              name: example-volume-trait
+#            spec:
+#              volumeList:
+#              - containerIndex: 0
+#                paths:
+#                - size: 10Gi
+#                  path: /var/log/test
+#                  storageClassName: alicloud-disk-1
+#                  name: path-1
+#                - size: 10Gi
+#                  path: /var/log/test2
+#                  storageClassName: alicloud-disk-2
+#                  name: path-2
+      scopes:
+        - scopeRef:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: HealthScope
+            name: example-health-scope
+---
+apiVersion: core.oam.dev/v1alpha2
+kind: HealthScope
+metadata:
+  name: example-health-scope
+spec:
+  workloadRefs: []
