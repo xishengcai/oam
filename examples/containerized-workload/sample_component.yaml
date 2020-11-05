@@ -6,6 +6,8 @@ spec:
   workload:
     apiVersion: core.oam.dev/v1alpha2
     kind: ContainerizedWorkload
+    metadata:
+      name: haha
     spec:
       containers:
         - name: wordpress
