@@ -7,6 +7,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o controll
 
 FROM oamdev/gcr.io-distroless-static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/controller .
+COPY --from=builder /root/go/src/oam/controller .
 USER nonroot:nonroot
 ENTRYPOINT ["/controller"]
