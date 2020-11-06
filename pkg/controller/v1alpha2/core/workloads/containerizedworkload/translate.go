@@ -45,6 +45,7 @@ var (
 // Reconcile error strings.
 const (
 	labelKey = "containerizedworkload.oam.crossplane.io"
+	labelAppId = "oam.runtime.app.id"
 
 	errNotContainerizedWorkload = "object is not a containerized workload"
 )
@@ -65,6 +66,9 @@ func TranslateContainerWorkload(ctx context.Context, w oam.Workload) ([]oam.Obje
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cw.GetName(),
 			Namespace: w.GetNamespace(),
+			Labels: map[string]string{
+				labelAppId: cw.GetName(),
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -277,6 +281,9 @@ func TranslateStatefulSetWorkload(ctx context.Context, w oam.Workload) ([]oam.Ob
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cw.GetName(),
 			Namespace: w.GetNamespace(),
+			Labels: map[string]string{
+				labelAppId: cw.GetName(),
+			},
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: w.GetName(),
@@ -501,6 +508,7 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 				Namespace: d.GetNamespace(),
 				Labels: map[string]string{
 					labelKey: string(w.GetUID()),
+					labelAppId: w.GetName(),
 				},
 			},
 			Spec: corev1.ServiceSpec{
@@ -540,6 +548,7 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 				Namespace: s.GetNamespace(),
 				Labels: map[string]string{
 					labelKey: string(w.GetUID()),
+					labelAppId: w.GetName(),
 				},
 			},
 			Spec: corev1.ServiceSpec{

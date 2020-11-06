@@ -1,0 +1,24 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-appconfig
+spec:
+  components:
+    - componentName: example-component
+      parameterValues:
+        - name: instance-name
+          value: example-appconfig-workload1
+        - name: image
+          value: wordpress:php7.2
+      scopes:
+        - scopeRef:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: HealthScope
+            name: example-health-scope
+---
+apiVersion: core.oam.dev/v1alpha2
+kind: HealthScope
+metadata:
+  name: example-health-scope
+spec:
+  workloadRefs: []
