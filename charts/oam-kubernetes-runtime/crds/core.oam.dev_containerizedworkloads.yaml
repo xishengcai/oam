@@ -247,7 +247,6 @@ spec:
                           name:
                             description: Name of this port. Must be unique within
                               its container. Must be lowercase alphabetical characters.
-                            pattern: ^[a-z]+$
                             type: string
                           protocol:
                             description: Protocol used by the server listening on

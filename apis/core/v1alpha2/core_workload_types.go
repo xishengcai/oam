@@ -211,7 +211,6 @@ const (
 type ContainerPort struct {
 	// Name of this port. Must be unique within its container. Must be lowercase
 	// alphabetical characters.
-	// +kubebuilder:validation:Pattern=^[a-z]+$
 	Name string `json:"name"`
 
 	// Port number. Must be unique within its container.
