@@ -26,6 +26,7 @@ func (r *Reconciler) renderDeployment(ctx context.Context,
 	if !ok {
 		return nil, fmt.Errorf("internal error, deployment is not rendered correctly")
 	}
+	deploy.SetLabels(map[string]string{util.LabelAppId:workload.Labels[util.LabelAppId]})
 	// make sure we don't have opinion on the replica count
 	deploy.Spec.Replicas = nil
 	// k8s server-side patch complains if the protocol is not set
@@ -59,6 +60,7 @@ func (r *Reconciler) renderStatefulSet(ctx context.Context,
 		return nil, fmt.Errorf("internal error, statefulSet is not rendered correctly")
 	}
 	// make sure we don't have opinion on the replica count
+	sts.SetLabels(map[string]string{util.LabelAppId:workload.Labels[util.LabelAppId]})
 	sts.Spec.Replicas = nil
 	// k8s server-side patch complains if the protocol is not set
 	for i := 0; i < len(sts.Spec.Template.Spec.Containers); i++ {
@@ -88,7 +90,7 @@ func (r *Reconciler) cleanupResources(ctx context.Context,
 	log := r.log.WithValues("gc childResource", workload.Name)
 	for _, res := range workload.Status.Resources {
 		//if res.Kind == childResourceKind && res.APIVersion == appsv1.SchemeGroupVersion.String() {
-		if res.Kind == childResourceKind{
+		if res.Kind == childResourceKind {
 			if res.UID != childResourceUID {
 				dn := client.ObjectKey{Name: res.Name, Namespace: workload.Namespace}
 
@@ -103,7 +105,7 @@ func (r *Reconciler) cleanupResources(ctx context.Context,
 				if err := r.Delete(ctx, obj); err != nil {
 					return err
 				}
- 				log.Info("gc containerizedWorkload childResource, Removed an orphaned: ", res.Kind, ",orphaned UID: ", res.UID)
+				log.Info("gc containerizedWorkload childResource, Removed an orphaned: ", res.Kind, ",orphaned UID: ", res.UID)
 			}
 		}
 	}
@@ -121,7 +123,6 @@ func generateChildResourceObj(objType string) runtime.Object {
 	return nil
 }
 
-
 // create a service for the deployment
 func (r *Reconciler) renderService(ctx context.Context,
 	workload *v1alpha2.ContainerizedWorkload, objs runtime.Object) (*corev1.Service, error) {
@@ -130,15 +131,18 @@ func (r *Reconciler) renderService(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	if service == nil {
-		return nil, fmt.Errorf("internal error, service is not rendered correctly")
+	if service == nil || len(service.Spec.Ports)==0 {
+		return nil, nil
 	}
 	// the service injector lib doesn't set the namespace and serviceType
 	service.Namespace = workload.Namespace
 	service.Spec.Type = corev1.ServiceTypeClusterIP
 	// k8s server-side patch complains if the protocol is not set
-	for i := 0; i < len(service.Spec.Ports); i++ {
-		service.Spec.Ports[i].Protocol = corev1.ProtocolTCP
+
+	for index, i := range service.Spec.Ports {
+		if i.Protocol == "" {
+			service.Spec.Ports[index].Protocol = corev1.ProtocolTCP
+		}
 	}
 	// always set the controller reference so that we can watch this service and
 	if err := ctrl.SetControllerReference(workload, service, r.Scheme); err != nil {

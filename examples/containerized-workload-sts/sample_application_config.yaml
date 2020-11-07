@@ -4,25 +4,13 @@ metadata:
   name: example-appconfig
 spec:
   components:
-    - componentName: example-component
-      parameterValues:
-        - name: instance-name
-          value: example-appconfig-workload1
-        - name: image
-          value: wordpress:php7.2
+    - componentName: oam-sts
       traits:
-        - trait:
-            apiVersion: core.oam.dev/v1alpha2
-            kind: ManualScalerTrait
-            metadata:
-              name: example-appconfig-trait
-            spec:
-              replicaCount: 2
         - trait:
             apiVersion: core.oam.dev/v1alpha2
             kind: VolumeTrait
             metadata:
-              name: example-volume-trait
+              name: oam-volume-trait
             spec:
               volumeList:
               - containerIndex: 0

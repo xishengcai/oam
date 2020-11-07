@@ -176,36 +176,37 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	service, err := r.renderService(ctx, &workload, childResourceWorkload)
 	if err != nil {
-		log.Error(err, "Failed to render a service")
 		r.record.Event(eventObj, event.Warning(errRenderService, err))
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderService)))
 	}
-	// server side apply the service
-	if err := r.Patch(ctx, service, client.Apply, applyOpts...); err != nil {
-		log.Error(err, "Failed to apply a service")
-		r.record.Event(eventObj, event.Warning(errApplyService, err))
-		return util.ReconcileWaitResult,
-			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyService)))
-	}
-	//r.record.Event(eventObj, event.Normal("Service created",
-	//	fmt.Sprintf("Workload `%s` successfully server side patched a service `%s`",
-	//		workload.Name, service.Name)))
-	// garbage collect the service/deployments that we created but not needed
-	if err := r.cleanupResources(ctx, &workload, serviceKind, service.UID); err != nil {
-		log.Error(err, "Failed to clean up resources")
-		r.record.Event(eventObj, event.Warning(errGcService, err))
-	}
+	if service != nil {
+		// server side apply the service
+		if err := r.Patch(ctx, service, client.Apply, applyOpts...); err != nil {
+			log.Error(err, "Failed to apply a service")
+			r.record.Event(eventObj, event.Warning(errApplyService, err))
+			return util.ReconcileWaitResult,
+				util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyService)))
+		}
+		//r.record.Event(eventObj, event.Normal("Service created",
+		//	fmt.Sprintf("Workload `%s` successfully server side patched a service `%s`",
+		//		workload.Name, service.Name)))
+		// garbage collect the service/deployments that we created but not needed
+		if err := r.cleanupResources(ctx, &workload, serviceKind, service.UID); err != nil {
+			log.Error(err, "Failed to clean up resources")
+			r.record.Event(eventObj, event.Warning(errGcService, err))
+		}
 
-	// record the new deployment, new service
-	workload.Status.Resources = append(workload.Status.Resources,
-		cpv1alpha1.TypedReference{
-			APIVersion: service.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-			Kind:       service.GetObjectKind().GroupVersionKind().Kind,
-			Name:       service.GetName(),
-			UID:        service.UID,
-		},
-	)
+		// record the new deployment, new service
+		workload.Status.Resources = append(workload.Status.Resources,
+			cpv1alpha1.TypedReference{
+				APIVersion: service.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+				Kind:       service.GetObjectKind().GroupVersionKind().Kind,
+				Name:       service.GetName(),
+				UID:        service.UID,
+			},
+		)
+	}
 
 	if err := r.Status().Update(ctx, &workload); err != nil {
 		return util.ReconcileWaitResult, err

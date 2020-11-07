@@ -41,8 +41,10 @@ var (
 	// ReconcileWaitResult is the time to wait between reconciliation.
 	ReconcileWaitResult = reconcile.Result{RequeueAfter: 30 * time.Second}
 
-	LabelKeyChildResource = "app.oam.dev/childResource"
+	LabelKeyChildResource     = "app.oam.dev/childResource"
 	LabelKeyChildResourceName = "app.oam.dev/childResourceName"
+	LabelAppId                = "oam.runtime.app.id"
+	LabelComponentId          = "oam.runtime.component.id"
 )
 
 const (

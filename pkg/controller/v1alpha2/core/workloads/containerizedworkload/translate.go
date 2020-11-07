@@ -19,6 +19,7 @@ package containerizedworkload
 import (
 	"context"
 	"errors"
+	"github.com/xishengcai/oam/pkg/oam/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 
@@ -45,8 +46,6 @@ var (
 // Reconcile error strings.
 const (
 	labelKey = "containerizedworkload.oam.crossplane.io"
-	labelAppId = "oam.runtime.app.id"
-
 	errNotContainerizedWorkload = "object is not a containerized workload"
 )
 
@@ -57,7 +56,10 @@ func TranslateContainerWorkload(ctx context.Context, w oam.Workload) ([]oam.Obje
 	if !ok {
 		return nil, errors.New(errNotContainerizedWorkload)
 	}
-
+	labels := map[string]string{
+		util.LabelAppId: cw.Labels[util.LabelAppId],
+		util.LabelComponentId: cw.GetName(),
+	}
 	d := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       deploymentKind,
@@ -65,22 +67,16 @@ func TranslateContainerWorkload(ctx context.Context, w oam.Workload) ([]oam.Obje
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cw.GetName(),
-			Namespace: w.GetNamespace(),
-			Labels: map[string]string{
-				labelAppId: cw.GetName(),
-			},
+			Namespace: cw.GetNamespace(),
+			Labels: labels,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					labelKey: string(cw.GetUID()),
-				},
+				MatchLabels: labels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						labelKey: string(cw.GetUID()),
-					},
+					Labels: labels,
 				},
 			},
 		},
@@ -272,7 +268,10 @@ func TranslateStatefulSetWorkload(ctx context.Context, w oam.Workload) ([]oam.Ob
 	if !ok {
 		return nil, errors.New(errNotContainerizedWorkload)
 	}
-
+	labels := map[string]string{
+		util.LabelAppId: cw.Labels[util.LabelAppId],
+		util.LabelComponentId: cw.GetName(),
+	}
 	d := &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       statefulKind,
@@ -280,23 +279,17 @@ func TranslateStatefulSetWorkload(ctx context.Context, w oam.Workload) ([]oam.Ob
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cw.GetName(),
-			Namespace: w.GetNamespace(),
-			Labels: map[string]string{
-				labelAppId: cw.GetName(),
-			},
+			Namespace: cw.GetNamespace(),
+			Labels: cw.Labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			ServiceName: w.GetName(),
+			ServiceName: cw.GetName(),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					labelKey: string(cw.GetUID()),
-				},
+				MatchLabels: labels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						labelKey: string(cw.GetUID()),
-					},
+					Labels: labels,
 				},
 			},
 		},
@@ -489,90 +482,47 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 	if obj == nil {
 		return nil, nil
 	}
+	svc := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       serviceKind,
+			APIVersion: serviceAPIVersion,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      w.GetName(),
+			Namespace: w.GetNamespace(),
+			Labels: w.GetLabels(),
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: w.GetLabels(),
+			Ports:    []corev1.ServicePort{},
+			Type:     corev1.ServiceTypeClusterIP,
+		},
+	}
 
+	var containers corev1.Container
 	d, ok := obj.(*appsv1.Deployment)
 	if ok {
-		// We don't add a Service if there are no containers for the Deployment.
-		// This should never happen in practice.
-		if len(d.Spec.Template.Spec.Containers) < 1 {
+		if len(d.Spec.Template.Spec.Containers) ==0 || len(d.Spec.Template.Spec.Containers[0].Ports)==0{
 			return nil, nil
 		}
-
-		svc := &corev1.Service{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       serviceKind,
-				APIVersion: serviceAPIVersion,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      d.GetName(),
-				Namespace: d.GetNamespace(),
-				Labels: map[string]string{
-					labelKey: string(w.GetUID()),
-					labelAppId: w.GetName(),
-				},
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: d.Spec.Selector.MatchLabels,
-				Ports:    []corev1.ServicePort{},
-				Type:     corev1.ServiceTypeLoadBalancer,
-			},
-		}
-
-		//svc.Spec.Ports = make([]corev1.ServicePort,0)
-		for _, c := range d.Spec.Template.Spec.Containers[0].Ports{
-			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
-				Name: c.Name,
-				Protocol: c.Protocol,
-				Port: c.ContainerPort,
-				TargetPort: intstr.FromInt(int(c.ContainerPort)),
-			})
-		}
-		return svc, nil
+		containers = d.Spec.Template.Spec.Containers[0]
 	}
 
 	s, ok := obj.(*appsv1.StatefulSet)
 	if ok {
-		// We don't add a Service if there are no containers for the statefulSet.
-		// This should never happen in practice.
-		if len(s.Spec.Template.Spec.Containers) < 1 {
+		if len(s.Spec.Template.Spec.Containers) == 0 ||len(s.Spec.Template.Spec.Containers[0].Ports)==0{
 			return nil, nil
 		}
-
-		svc := &corev1.Service{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       serviceKind,
-				APIVersion: serviceAPIVersion,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      s.GetName(),
-				Namespace: s.GetNamespace(),
-				Labels: map[string]string{
-					labelKey: string(w.GetUID()),
-					labelAppId: w.GetName(),
-				},
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: s.Spec.Selector.MatchLabels,
-				Ports:    []corev1.ServicePort{},
-				Type:     corev1.ServiceTypeLoadBalancer,
-			},
-		}
-
-		// We only add a single Service for the Deployment, even if multiple
-		// ports or no ports are defined on the first container. This is to
-		// exclude the need for implementing garbage collection in the
-		// short-term in the case that ports are modified after creation.
-		if len(s.Spec.Template.Spec.Containers[0].Ports) > 0 {
-			svc.Spec.Ports = []corev1.ServicePort{
-				{
-					Name:       s.GetName(),
-					Port:       s.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort,
-					TargetPort: intstr.FromInt(int(s.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort)),
-				},
-			}
-		}
-
-		return svc, nil
+		containers = s.Spec.Template.Spec.Containers[0]
 	}
-	return nil, nil
+
+	for _, c := range containers.Ports{
+		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
+			Name: c.Name,
+			Protocol: c.Protocol,
+			Port: c.ContainerPort,
+			TargetPort: intstr.FromInt(int(c.ContainerPort)),
+		})
+	}
+	return svc, nil
 }

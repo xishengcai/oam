@@ -11,25 +11,12 @@ spec:
     spec:
       containers:
         - name: wordpress
-          image: wordpress:4.6.1-apache
+          image: wordpress:php7.2
           ports:
             - containerPort: 80
               name: wordpress
-            - containerPort: 81
-              name: test
-          env:
-            - name: TEST_ENV
-              value: test
           resources:
             cpu:
               required: "50m"
             memory:
               required: "60Mi"
-  parameters:
-    - name: instance-name
-      required: true
-      fieldPaths:
-        - metadata.name
-    - name: image
-      fieldPaths:
-        - spec.containers[0].image

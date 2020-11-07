@@ -180,10 +180,12 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		if volumeTraitExit {
 			w.SetLabels(map[string]string{
 				util.LabelKeyChildResource: util.KindStatefulSet,
+				util.LabelAppId: ac.Name,
 			})
 		} else {
 			w.SetLabels(map[string]string{
 				util.LabelKeyChildResource: util.KindDeployment,
+				util.LabelAppId: ac.Name,
 			})
 		}
 	}
