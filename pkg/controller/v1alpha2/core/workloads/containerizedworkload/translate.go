@@ -490,10 +490,14 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      w.GetName(),
 			Namespace: w.GetNamespace(),
-			Labels: w.GetLabels(),
+			Labels:  map[string]string{
+				util.LabelAppId: w.GetLabels()[util.LabelAppId],
+			},
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: w.GetLabels(),
+			Selector: map[string]string{
+				util.LabelComponentId: w.GetName(),
+			},
 			Ports:    []corev1.ServicePort{},
 			Type:     corev1.ServiceTypeClusterIP,
 		},
