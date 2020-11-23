@@ -289,3 +289,36 @@ func DeepHashObject(hasher hash.Hash, objectToWrite interface{}) {
 	}
 	_, _ = printer.Fprintf(hasher, "%#v", objectToWrite)
 }
+
+// A metaObject is a Kubernetes object that has label and annotation
+type labelAnnotationObject interface {
+	GetLabels() map[string]string
+	SetLabels(labels map[string]string)
+	GetAnnotations() map[string]string
+	SetAnnotations(annotations map[string]string)
+}
+
+// PassLabelAndAnnotation passes through labels and annotation objectMeta from the parent to the child object
+func PassLabelAndAnnotation(parentObj oam.Object, childObj labelAnnotationObject) {
+	// pass app-config labels
+	childObj.SetLabels(MergeMapOverrideWithDst(parentObj.GetLabels(), childObj.GetLabels()))
+	// pass app-config annotation
+	childObj.SetAnnotations(MergeMapOverrideWithDst(parentObj.GetAnnotations(), childObj.GetAnnotations()))
+}
+
+// MergeMapOverrideWithDst merges two could be nil maps. If any conflicts, override src with dst.
+func MergeMapOverrideWithDst(src, dst map[string]string) map[string]string {
+	if src == nil && dst == nil {
+		return nil
+	}
+	r := make(map[string]string)
+	for k, v := range dst {
+		r[k] = v
+	}
+	for k, v := range src {
+		if _, exist := r[k]; !exist {
+			r[k] = v
+		}
+	}
+	return r
+}

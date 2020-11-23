@@ -65,7 +65,7 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 		}
 		volumes := res.Spec.Template.Spec.Volumes
 		var wantDeletePathName []string
-		for i:=len(volumes)-1;i>=0;i--{
+		for i := len(volumes) - 1; i >= 0; i-- {
 			if volumes[i].PersistentVolumeClaim != nil {
 				wantDeletePathName = append(wantDeletePathName, volumes[i].Name)
 				volumes = append(volumes[:i], volumes[i+1:]...)
@@ -76,7 +76,7 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 
 		for index, c := range res.Spec.Template.Spec.Containers {
 			volumeMounts := c.VolumeMounts
-			for i:=len(volumeMounts)-1;i>=0;i--{
+			for i := len(volumeMounts) - 1; i >= 0; i-- {
 				for _, wd := range wantDeletePathName {
 					if volumeMounts[i].Name == wd {
 						volumeMounts = append(volumeMounts[:i], volumeMounts[i+1:]...)
@@ -100,7 +100,7 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 		}
 		volumes := res.Spec.Template.Spec.Volumes
 		var wantDeletePathName []string
-		for i:=len(volumes)-1;i>=0;i--{
+		for i := len(volumes) - 1; i >= 0; i-- {
 			if volumes[i].PersistentVolumeClaim != nil {
 				wantDeletePathName = append(wantDeletePathName, volumes[i].Name)
 				volumes = append(volumes[:i], volumes[i+1:]...)
@@ -111,7 +111,7 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 
 		for index, c := range res.Spec.Template.Spec.Containers {
 			volumeMounts := c.VolumeMounts
-			for i:=len(volumeMounts)-1;i>=0;i--{
+			for i := len(volumeMounts) - 1; i >= 0; i-- {
 				for _, wd := range wantDeletePathName {
 					if volumeMounts[i].Name == wd {
 						volumeMounts = append(volumeMounts[:i], volumeMounts[i+1:]...)

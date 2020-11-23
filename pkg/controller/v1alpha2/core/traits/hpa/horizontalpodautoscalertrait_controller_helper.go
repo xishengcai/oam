@@ -24,7 +24,6 @@ import (
 	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
-
 const (
 	KindHPA         = "HorizontalPodAutoscaler"
 	KindDeployment  = "Deployment"
@@ -33,18 +32,15 @@ const (
 	GVKDeployment  = "apps/v1, Kind=Deployment"
 	GVKStatefulSet = "apps/v1, Kind=StatefulSet"
 
-	LabelKey = "hpatrait.oam.crossplane.io"
+	LabelKey                  = "hpatrait.oam.crossplane.io"
 	errMissContainerResources = "missing container resources config"
-
 )
 
 var (
-
-	oamAPIVersion  = oamv1alpha2.SchemeGroupVersion.String()
-	appsAPIVersion = appsv1.SchemeGroupVersion.String()
+	oamAPIVersion   = oamv1alpha2.SchemeGroupVersion.String()
+	appsAPIVersion  = appsv1.SchemeGroupVersion.String()
 	GroupVersionHPA = v2beta1.SchemeGroupVersion.String()
 )
-
 
 func (r *Reconciler) renderHPA(ctx context.Context, trait oam.Trait, resources []*unstructured.Unstructured) ([]*v2beta1.HorizontalPodAutoscaler, error) {
 	t, ok := trait.(*oamv1alpha2.HorizontalPodAutoscalerTrait)
@@ -79,10 +75,10 @@ func (r *Reconciler) renderHPA(ctx context.Context, trait oam.Trait, resources [
 				},
 			},
 			Spec: v2beta1.HorizontalPodAutoscalerSpec{
-				ScaleTargetRef:                 scaleTargetRef,
-				MinReplicas:                    t.Spec.MinReplicas,
-				MaxReplicas:                    t.Spec.MaxReplicas,
-				Metrics: t.Spec.Metrics,
+				ScaleTargetRef: scaleTargetRef,
+				MinReplicas:    t.Spec.MinReplicas,
+				MaxReplicas:    t.Spec.MaxReplicas,
+				Metrics:        t.Spec.Metrics,
 			},
 		}
 		if err := ctrl.SetControllerReference(trait, hpa, r.Scheme); err != nil {

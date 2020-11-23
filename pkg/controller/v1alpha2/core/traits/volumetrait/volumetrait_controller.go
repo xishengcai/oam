@@ -202,8 +202,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 				pvcName := fmt.Sprintf("%s-%d-%s", res.GetName(), item.ContainerIndex, path.Name)
 				volumes = append(volumes, v1.Volume{
 					Name:         pvcName,
-					VolumeSource: v1.VolumeSource{PersistentVolumeClaim:
-						&v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
+					VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
 				})
 				volumeMount := v1.VolumeMount{
 					Name:      pvcName,
@@ -243,8 +242,8 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 				b, _ := json.Marshal(vmInterface)
 				_ = json.Unmarshal(b, &vms)
 				for _, o := range vms {
-					for _,v := range oldVolumes{
-						if v.Name == o.Name && v.PersistentVolumeClaim == nil{
+					for _, v := range oldVolumes {
+						if v.Name == o.Name && v.PersistentVolumeClaim == nil {
 							volumeMounts = append(volumeMounts, o)
 						}
 					}

@@ -25,7 +25,6 @@ import (
 
 var _ oam.Trait = &HorizontalPodAutoscalerTrait{}
 
-
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:categories={crossplane,oam}
 // +kubebuilder:subresource:status
@@ -37,7 +36,6 @@ type HorizontalPodAutoscalerTrait struct {
 	Spec   HorizontalPodAutoscalerTraitSpec   `json:"spec,omitempty"`
 	Status HorizontalPodAutoscalerTraitStatus `json:"status,omitempty"`
 }
-
 
 // HorizontalPodAutoscalerTraitSpec defines the desired state of HorizontalPodAutoscalerTrait
 type HorizontalPodAutoscalerTraitSpec struct {
@@ -86,4 +84,3 @@ type HorizontalPodAutoscalerTraitList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []HorizontalPodAutoscalerTrait `json:"items"`
 }
-

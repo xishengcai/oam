@@ -26,6 +26,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam/util"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,9 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
-	"github.com/xishengcai/oam/apis/core/v1alpha2"
-	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
 // Reconcile error strings.
@@ -46,6 +45,7 @@ const (
 	errRenderService    = "cannot render service"
 	errApplyService     = "cannot apply the service"
 	errGcService        = "cannot gc the service"
+	errApplyConfigMap   = "cannot apply the configmap"
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
@@ -147,7 +147,8 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return util.ReconcileWaitResult,
 				util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderWorkload)))
 		}
-		// server side apply, only the fields we set are touched
+
+		//server side apply, only the fields we set are touched
 		if err := r.Patch(ctx, deploy, client.Apply, applyOpts...); err != nil {
 			log.Error(err, "Failed to apply to a deployment")
 			r.record.Event(eventObj, event.Warning(errApplyDeployment, err))
@@ -173,7 +174,42 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		childResourceWorkload = deploy
 	}
+	// configMap
+	configMapApplyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(workload.GetUID())}
+	configMaps, err := r.renderConfigMaps(ctx, &workload)
+	if err != nil {
+		log.Error(err, "Failed to render configMap")
+		r.record.Event(eventObj, event.Warning(errRenderWorkload, err))
+		return util.ReconcileWaitResult,
+			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderWorkload)))
+	}
+	for _, cm := range configMaps {
+		if err := r.Patch(ctx, cm, client.Apply, configMapApplyOpts...); err != nil {
+			log.Error(err, "Failed to apply a configMap")
+			r.record.Event(eventObj, event.Warning(errApplyConfigMap, err))
+			return util.ReconcileWaitResult,
+				util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyConfigMap)))
+		}
+		r.record.Event(eventObj, event.Normal("ConfigMap created",
+			fmt.Sprintf("Workload `%s` successfully server side patched a configmap `%s`",
+				workload.Name, cm.Name)))
+		if err := r.cleanupResources(ctx, &workload, configMapKind, cm.UID); err != nil {
+			log.Error(err, "Failed to clean up resources")
+			r.record.Event(eventObj, event.Warning(errGcService, err))
+		}
 
+		// record the new deployment, new service
+		workload.Status.Resources = append(workload.Status.Resources,
+			cpv1alpha1.TypedReference{
+				APIVersion: cm.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+				Kind:       cm.GetObjectKind().GroupVersionKind().Kind,
+				Name:       cm.GetName(),
+				UID:        cm.UID,
+			},
+		)
+	}
+
+	// service
 	service, err := r.renderService(ctx, &workload, childResourceWorkload)
 	if err != nil {
 		r.record.Event(eventObj, event.Warning(errRenderService, err))
@@ -225,5 +261,6 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&corev1.Service{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(&corev1.ConfigMap{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }

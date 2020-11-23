@@ -23,6 +23,11 @@ spec:
               required: "50m"
             memory:
               required: "60Mi"
+          config:
+          - path: /opt/xxx.log
+            value: dddddaaaaaa
+          - path: /opt/abc.log
+            value: xxx
   parameters:
     - name: instance-name
       required: true

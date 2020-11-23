@@ -26,7 +26,7 @@ func (r *Reconciler) renderDeployment(ctx context.Context,
 	if !ok {
 		return nil, fmt.Errorf("internal error, deployment is not rendered correctly")
 	}
-	deploy.SetLabels(map[string]string{util.LabelAppId:workload.Labels[util.LabelAppId]})
+	deploy.SetLabels(map[string]string{util.LabelAppId: workload.Labels[util.LabelAppId]})
 	// make sure we don't have opinion on the replica count
 	deploy.Spec.Replicas = nil
 	// k8s server-side patch complains if the protocol is not set
@@ -37,8 +37,6 @@ func (r *Reconciler) renderDeployment(ctx context.Context,
 			}
 		}
 	}
-	r.log.Info(" rendered a deployment", "deploy", deploy.Spec.Template.Spec)
-
 	// set the controller reference so that we can watch this deployment and it will be deleted automatically
 	if err := ctrl.SetControllerReference(workload, deploy, r.Scheme); err != nil {
 		return nil, err
@@ -60,7 +58,7 @@ func (r *Reconciler) renderStatefulSet(ctx context.Context,
 		return nil, fmt.Errorf("internal error, statefulSet is not rendered correctly")
 	}
 	// make sure we don't have opinion on the replica count
-	sts.SetLabels(map[string]string{util.LabelAppId:workload.Labels[util.LabelAppId]})
+	sts.SetLabels(map[string]string{util.LabelAppId: workload.Labels[util.LabelAppId]})
 	sts.Spec.Replicas = nil
 	// k8s server-side patch complains if the protocol is not set
 	for i := 0; i < len(sts.Spec.Template.Spec.Containers); i++ {
@@ -131,7 +129,7 @@ func (r *Reconciler) renderService(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	if service == nil || len(service.Spec.Ports)==0 {
+	if service == nil || len(service.Spec.Ports) == 0 {
 		return nil, nil
 	}
 	// the service injector lib doesn't set the namespace and serviceType
@@ -149,4 +147,20 @@ func (r *Reconciler) renderService(ctx context.Context,
 		return nil, err
 	}
 	return service, nil
+}
+
+// create ConfigMaps for ContainerConfigFiles
+func (r *Reconciler) renderConfigMaps(ctx context.Context,
+	workload *v1alpha2.ContainerizedWorkload) (map[string]*corev1.ConfigMap, error) {
+	configMaps, err := TranslateConfigMaps(ctx, workload)
+	if err != nil {
+		return nil, err
+	}
+	for _, cm := range configMaps {
+		// always set the controller reference so that we can watch this configmap and it will be deleted automatically
+		if err := ctrl.SetControllerReference(workload, cm, r.Scheme); err != nil {
+			return nil, err
+		}
+	}
+	return configMaps, nil
 }
