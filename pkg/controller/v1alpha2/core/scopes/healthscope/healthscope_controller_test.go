@@ -24,10 +24,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	corev1alpha2 "github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/mock"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	corev1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam/mock"
+	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
 var (

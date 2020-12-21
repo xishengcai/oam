@@ -39,11 +39,11 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/discoverymapper"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/controller"
+	"github.com/xishengcai/oam/pkg/oam"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
+	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
 const (

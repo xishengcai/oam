@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/discoverymapper"
+	"github.com/xishengcai/oam/pkg/controller"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,8 +29,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	oamv1alpha2 "github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
 // Reconcile error strings.

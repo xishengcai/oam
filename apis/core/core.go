@@ -21,7 +21,7 @@ package core
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
 func init() {

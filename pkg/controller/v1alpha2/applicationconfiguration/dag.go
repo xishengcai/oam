@@ -19,7 +19,7 @@ package applicationconfiguration
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
 // dag is the dependency graph for an AppConfig.

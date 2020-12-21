@@ -40,8 +40,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/mock"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam/mock"
 )
 
 // OAMApplicationReconciler implements controller runtime Reconciler interface

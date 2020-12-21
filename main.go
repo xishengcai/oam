@@ -8,17 +8,16 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 	crdv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller"
-	appController "github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2"
-	webhook "github.com/crossplane/oam-kubernetes-runtime2/pkg/webhook/v1alpha2"
+	"github.com/xishengcai/oam/apis/core"
+	"github.com/xishengcai/oam/pkg/controller"
+	appController "github.com/xishengcai/oam/pkg/controller/v1alpha2"
+	webhook "github.com/xishengcai/oam/pkg/webhook/v1alpha2"
 )
 
 var scheme = runtime.NewScheme()

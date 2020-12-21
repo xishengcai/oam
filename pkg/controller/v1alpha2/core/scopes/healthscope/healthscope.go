@@ -34,9 +34,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	corev1alpha2 "github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	corev1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam"
 
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 )

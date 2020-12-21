@@ -28,10 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	controllerscheme "sigs.k8s.io/controller-runtime/pkg/scheme"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core"
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/discoverymapper"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	"github.com/xishengcai/oam/apis/core"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
+	"github.com/xishengcai/oam/pkg/oam/util"
 	// +kubebuilder:scaffold:imports
 )
 

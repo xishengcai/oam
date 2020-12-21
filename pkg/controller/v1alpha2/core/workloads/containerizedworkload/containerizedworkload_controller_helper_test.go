@@ -13,8 +13,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core"
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/apis/core"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
 func TestContainerizedWorkloadReconciler_cleanupResources(t *testing.T) {

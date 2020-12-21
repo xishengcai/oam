@@ -18,8 +18,8 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	util "github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	util "github.com/xishengcai/oam/pkg/oam/util"
 )
 
 // ControllerRevisionComponentLabel indicate which component the revision belong to

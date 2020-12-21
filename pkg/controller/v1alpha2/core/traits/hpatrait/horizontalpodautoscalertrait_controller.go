@@ -6,9 +6,9 @@ import (
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/discoverymapper"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	"github.com/xishengcai/oam/pkg/controller"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
+	"github.com/xishengcai/oam/pkg/oam/util"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
@@ -19,7 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	oamv1alpha2 "github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
 // Reconcile error strings.

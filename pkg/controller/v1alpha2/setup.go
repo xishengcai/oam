@@ -17,17 +17,17 @@ limitations under the License.
 package v1alpha2
 
 import (
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2/core/traits/hpatrait"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2/core/traits/volumetrait"
+	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/traits/hpatrait"
+	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/traits/volumetrait"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2/applicationconfiguration"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2/core/scopes/healthscope"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2/core/traits/manualscalertrait"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2/core/workloads/containerizedworkload"
+	"github.com/xishengcai/oam/pkg/controller"
+	"github.com/xishengcai/oam/pkg/controller/v1alpha2/applicationconfiguration"
+	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/scopes/healthscope"
+	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/traits/manualscalertrait"
+	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/workloads/containerizedworkload"
 )
 
 // Setup workload controllers.

@@ -1,7 +1,7 @@
 package mock
 
 import (
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/discoverymapper"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"

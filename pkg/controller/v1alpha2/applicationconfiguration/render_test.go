@@ -38,11 +38,11 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core"
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/mock"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	"github.com/xishengcai/oam/apis/core"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam"
+	"github.com/xishengcai/oam/pkg/oam/mock"
+	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
 var _ ComponentRenderer = &components{}

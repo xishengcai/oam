@@ -8,7 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
 func TestCheckParams(t *testing.T) {

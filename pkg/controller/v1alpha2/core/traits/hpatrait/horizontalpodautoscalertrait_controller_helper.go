@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
+	"github.com/xishengcai/oam/pkg/oam"
+	"github.com/xishengcai/oam/pkg/oam/util"
 	"k8s.io/api/autoscaling/v2beta1"
 	"k8s.io/client-go/scale/scheme/autoscalingv1"
 
@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	oamv1alpha2 "github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
 const (

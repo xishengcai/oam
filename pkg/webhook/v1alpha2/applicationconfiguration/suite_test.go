@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/crossplane/oam-kubernetes-runtime2/apis/core"
+	"github.com/xishengcai/oam/apis/core"
 )
 
 var scheme = runtime.NewScheme()

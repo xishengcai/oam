@@ -18,7 +18,7 @@ package v1alpha2
 
 import (
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
-	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam"
+	"github.com/xishengcai/oam/pkg/oam"
 	"k8s.io/api/autoscaling/v2beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
