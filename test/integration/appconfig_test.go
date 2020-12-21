@@ -37,9 +37,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/test/integration"
 
-	"github.com/xishengcai/oam/apis/core"
-	"github.com/xishengcai/oam/apis/core/v1alpha2"
-	v1alph2controller "github.com/xishengcai/oam/pkg/controller/v1alpha2"
+	"github.com/crossplane/oam-kubernetes-runtime2/apis/core"
+	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller"
+	v1alph2controller "github.com/crossplane/oam-kubernetes-runtime2/pkg/controller/v1alpha2"
 )
 
 var (
@@ -239,7 +240,7 @@ func TestAppConfigController(t *testing.T) {
 
 	zl := zap.New(zap.UseDevMode(true))
 	log := logging.NewLogrLogger(zl.WithName("app-config"))
-	if err := v1alph2controller.Setup(i, log); err != nil {
+	if err := v1alph2controller.Setup(i, controller.Args{RevisionLimit: 10}, log); err != nil {
 		t.Fatal(err)
 	}
 

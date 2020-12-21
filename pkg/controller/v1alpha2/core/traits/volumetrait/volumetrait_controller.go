@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/crossplane/oam-kubernetes-runtime2/pkg/controller"
+	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/discoverymapper"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,8 +29,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
-	"github.com/xishengcai/oam/pkg/oam/util"
+	oamv1alpha2 "github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
 )
 
 // Reconcile error strings.
@@ -39,15 +41,20 @@ const (
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager, log logging.Logger) error {
-	reconcile := Reconcile{
+func Setup(mgr ctrl.Manager,args controller.Args, log logging.Logger) error {
+	dm, err := discoverymapper.New(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r := Reconcile{
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
 		log:             ctrl.Log.WithName("VolumeTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeTrait")),
 		Scheme:          mgr.GetScheme(),
+		dm: dm,
 	}
-	return reconcile.SetupWithManager(mgr, log)
+	return r.SetupWithManager(mgr, log)
 
 }
 
@@ -55,6 +62,7 @@ func Setup(mgr ctrl.Manager, log logging.Logger) error {
 type Reconcile struct {
 	client.Client
 	discovery.DiscoveryClient
+	dm     discoverymapper.DiscoveryMapper
 	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
@@ -113,7 +121,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Fetch the child resources list from the corresponding workload
-	resources, err := util.FetchWorkloadChildResources(ctx, mLog, r, workload)
+	resources, err := util.FetchWorkloadChildResources(ctx, mLog, r, r.dm, workload)
 	if err != nil {
 		mLog.Error(err, "Error while fetching the workload child resources", "workload", workload.UnstructuredContent())
 		r.record.Event(eventObj, event.Warning(util.ErrFetchChildResources, err))

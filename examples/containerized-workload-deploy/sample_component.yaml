@@ -2,6 +2,7 @@ apiVersion: core.oam.dev/v1alpha2
 kind: Component
 metadata:
   name: component-dep
+  namespace: default
 spec:
   workload:
     apiVersion: core.oam.dev/v1alpha2
@@ -23,11 +24,6 @@ spec:
               required: "50m"
             memory:
               required: "60Mi"
-          config:
-          - path: /opt/xxx.log
-            value: dddddaaaaaa
-          - path: /opt/abc.log
-            value: xxx
   parameters:
     - name: instance-name
       required: true

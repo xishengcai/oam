@@ -2,6 +2,7 @@ apiVersion: core.oam.dev/v1alpha2
 kind: ApplicationConfiguration
 metadata:
   name: example-appconfig
+  namespace: default
 spec:
   components:
     - componentName: component-dep

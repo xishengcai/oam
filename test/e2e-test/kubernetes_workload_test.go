@@ -15,8 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/xishengcai/oam/apis/core/v1alpha2"
-	"github.com/xishengcai/oam/pkg/oam/util"
+	"github.com/crossplane/oam-kubernetes-runtime2/apis/core/v1alpha2"
+	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
 )
 
 var _ = Describe("Test kubernetes native workloads", func() {
@@ -43,7 +43,7 @@ var _ = Describe("Test kubernetes native workloads", func() {
 			func() error {
 				return k8sClient.Get(ctx, objectKey, res)
 			},
-			time.Second*30, time.Millisecond*500).Should(&util.NotFoundMatcher{})
+			time.Second*120, time.Millisecond*500).Should(&util.NotFoundMatcher{})
 		// recreate it
 		Eventually(
 			func() error {

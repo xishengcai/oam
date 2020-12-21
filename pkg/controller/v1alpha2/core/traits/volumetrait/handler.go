@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/xishengcai/oam/pkg/oam/util"
+	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam/util"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

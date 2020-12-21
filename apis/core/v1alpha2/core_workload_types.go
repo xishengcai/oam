@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/xishengcai/oam/pkg/oam"
+	"github.com/crossplane/oam-kubernetes-runtime2/pkg/oam"
 )
 
 // An OperatingSystem required by a containerised workload.
@@ -196,6 +196,11 @@ type ContainerConfigFile struct {
 	// container.
 	// +optional
 	FromSecret *SecretKeySelector `json:"fromSecret,omitempty"`
+
+	// Path within the volume from which the container's volume should be mounted.
+	// Defaults to "" (volume's root).
+	// +optional
+	SubPath bool `json:"subPath,omitempty"`
 }
 
 // A TransportProtocol represents a transport layer protocol.
@@ -211,6 +216,7 @@ const (
 type ContainerPort struct {
 	// Name of this port. Must be unique within its container. Must be lowercase
 	// alphabetical characters.
+	// +kubebuilder:validation:Pattern=^[a-z]+$
 	Name string `json:"name"`
 
 	// Port number. Must be unique within its container.

@@ -93,26 +93,6 @@ func (hs *HealthScope) AddWorkloadReference(r runtimev1alpha1.TypedReference) {
 }
 
 // GetCondition of this VolumeTrait.
-func (vt *VolumeTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
-	return vt.Status.GetCondition(ct)
-}
-
-// SetConditions of this VolumeTrait.
-func (vt *VolumeTrait) SetConditions(c ...runtimev1alpha1.Condition) {
-	vt.Status.SetConditions(c...)
-}
-
-// GetWorkloadReference of this VolumeTrait.
-func (vt *VolumeTrait) GetWorkloadReference() runtimev1alpha1.TypedReference {
-	return vt.Spec.WorkloadReference
-}
-
-// SetWorkloadReference of this VolumeTrait.
-func (vt *VolumeTrait) SetWorkloadReference(r runtimev1alpha1.TypedReference) {
-	vt.Spec.WorkloadReference = r
-}
-
-// GetCondition of this VolumeTrait.
 func (h *HorizontalPodAutoscalerTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
 	return h.Status.GetCondition(ct)
 }
@@ -130,4 +110,24 @@ func (h *HorizontalPodAutoscalerTrait) GetWorkloadReference() runtimev1alpha1.Ty
 // SetWorkloadReference of this VolumeTrait.
 func (h *HorizontalPodAutoscalerTrait) SetWorkloadReference(r runtimev1alpha1.TypedReference) {
 	h.Spec.WorkloadReference = r
+}
+
+// GetCondition of this VolumeTrait.
+func (vt *VolumeTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
+	return vt.Status.GetCondition(ct)
+}
+
+// SetConditions of this VolumeTrait.
+func (vt *VolumeTrait) SetConditions(c ...runtimev1alpha1.Condition) {
+	vt.Status.SetConditions(c...)
+}
+
+// GetWorkloadReference of this VolumeTrait.
+func (vt *VolumeTrait) GetWorkloadReference() runtimev1alpha1.TypedReference {
+	return vt.Spec.WorkloadReference
+}
+
+// SetWorkloadReference of this VolumeTrait.
+func (vt *VolumeTrait) SetWorkloadReference(r runtimev1alpha1.TypedReference) {
+	vt.Spec.WorkloadReference = r
 }
