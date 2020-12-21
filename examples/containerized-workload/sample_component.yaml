@@ -13,19 +13,18 @@ spec:
           ports:
             - containerPort: 80
               name: wordpress
-            - containerPort: 81
-              name: test
           env:
             - name: TEST_ENV
               value: test
-          resources:
-            cpu:
-              required: "50m"
-            memory:
-              required: "60Mi"
+          config: 
+            - path: /test/configfile/config
+              value: test
+            - path: /test/secretconfig
+              fromSecret: 
+                name: mysecret
+                key: password
   parameters:
     - name: instance-name
-      required: true
       fieldPaths:
         - metadata.name
     - name: image

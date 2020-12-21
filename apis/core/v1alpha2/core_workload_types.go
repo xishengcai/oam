@@ -196,6 +196,11 @@ type ContainerConfigFile struct {
 	// container.
 	// +optional
 	FromSecret *SecretKeySelector `json:"fromSecret,omitempty"`
+
+	// Path within the volume from which the container's volume should be mounted.
+	// Defaults to "" (volume's root).
+	// +optional
+	SubPath bool `json:"subPath,omitempty"`
 }
 
 // A TransportProtocol represents a transport layer protocol.

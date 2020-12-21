@@ -1,0 +1,25 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: compent-hpa
+spec:
+  components:
+    - componentName: compent-hpa
+      traits:
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: HorizontalPodAutoscalerTrait
+            metadata:
+              name:  example-hpatrait
+            spec:
+              minReplicas: 1
+              maxReplicas: 5
+              metrics:
+                - type: Resource
+                  resource:
+                    name: memory
+                    targetAverageUtilization: 60
+                - type: Resource
+                  resource:
+                    name: cpu
+                    targetAverageUtilization: 50

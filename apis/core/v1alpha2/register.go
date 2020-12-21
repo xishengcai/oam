@@ -101,19 +101,19 @@ var (
 	HealthScopeGroupVersionKind = SchemeGroupVersion.WithKind(HealthScopeKind)
 )
 
+var (
+	HorizontalPodAutoscalerTraitKind             = reflect.TypeOf(HorizontalPodAutoscalerTrait{}).Name()
+	HorizontalPodAutoscalerTraitGroupKind        = schema.GroupKind{Group: Group, Kind: HorizontalPodAutoscalerTraitKind}.String()
+	HorizontalPodAutoscalerTraitKindAPIVersion   = HorizontalPodAutoscalerTraitKind + "." + SchemeGroupVersion.String()
+	HorizontalPodAutoscalerTraitGroupVersionKind = SchemeGroupVersion.WithKind(HorizontalPodAutoscalerTraitKind)
+)
+
 // VolumeTrait type metadata.
 var (
 	VolumeTraitKind             = reflect.TypeOf(VolumeTrait{}).Name()
 	VolumeTraitGroupKind        = schema.GroupKind{Group: Group, Kind: VolumeTraitKind}.String()
 	VolumeTraitKindAPIVersion   = VolumeTraitKind + "." + SchemeGroupVersion.String()
 	VolumeTraitGroupVersionKind = SchemeGroupVersion.WithKind(VolumeTraitKind)
-)
-
-var (
-	HorizontalPodAutoscalerTraitKind             = reflect.TypeOf(HorizontalPodAutoscalerTrait{}).Name()
-	HorizontalPodAutoscalerTraitGroupKind        = schema.GroupKind{Group: Group, Kind: HorizontalPodAutoscalerTraitKind}.String()
-	HorizontalPodAutoscalerTraitKindAPIVersion   = HorizontalPodAutoscalerTraitKind + "." + SchemeGroupVersion.String()
-	HorizontalPodAutoscalerTraitGroupVersionKind = SchemeGroupVersion.WithKind(HorizontalPodAutoscalerTraitKind)
 )
 
 func init() {

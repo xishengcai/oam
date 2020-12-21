@@ -29,10 +29,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -65,7 +68,11 @@ func withDependencyStatus(s v1alpha2.DependencyStatus) acParam {
 }
 
 func ac(p ...acParam) *v1alpha2.ApplicationConfiguration {
-	ac := &v1alpha2.ApplicationConfiguration{}
+	ac := &v1alpha2.ApplicationConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Finalizers: []string{workloadScopeFinalizer},
+		},
+	}
 	for _, fn := range p {
 		fn(ac)
 	}
@@ -91,6 +98,8 @@ func TestReconciler(t *testing.T) {
 	trait.SetNamespace(namespace)
 	trait.SetName("trait")
 
+	now := metav1.Now()
+
 	depStatus := v1alpha2.DependencyStatus{
 		Unsatisfied: []v1alpha2.UnstaifiedDependency{{
 			From: v1alpha2.DependencyFromObject{
@@ -110,6 +119,17 @@ func TestReconciler(t *testing.T) {
 				FieldPaths: []string{"spec.key"},
 			},
 		}},
+	}
+
+	mockGetAppConfigFn := func(_ context.Context, key client.ObjectKey, obj runtime.Object) error {
+		if o, ok := obj.(*v1alpha2.ApplicationConfiguration); ok {
+			*o = v1alpha2.ApplicationConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers: []string{workloadScopeFinalizer},
+				},
+			}
+		}
+		return nil
 	}
 
 	type args struct {
@@ -144,7 +164,7 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet: test.NewMockGetFn(nil),
+						MockGet: mockGetAppConfigFn,
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
 
 							want := ac(withConditions(runtimev1alpha1.ReconcileError(errors.Wrap(errBoom, errRenderComponents))))
@@ -172,7 +192,7 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet: test.NewMockGetFn(nil),
+						MockGet: mockGetAppConfigFn,
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
 							want := ac(withConditions(runtimev1alpha1.ReconcileError(errors.Wrap(errBoom, errApplyComponents))))
 							if diff := cmp.Diff(want, o.(*v1alpha2.ApplicationConfiguration)); diff != "" {
@@ -187,9 +207,9 @@ func TestReconciler(t *testing.T) {
 					WithRenderer(ComponentRenderFn(func(_ context.Context, _ *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
 						return []Workload{{Workload: workload}}, &v1alpha2.DependencyStatus{}, nil
 					})),
-					WithApplicator(WorkloadApplyFn(func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
+					WithApplicator(WorkloadApplyFns{ApplyFn: func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
 						return errBoom
-					})),
+					}}),
 				},
 			},
 			want: want{
@@ -201,7 +221,7 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet:    test.NewMockGetFn(nil),
+						MockGet:    mockGetAppConfigFn,
 						MockDelete: test.NewMockDeleteFn(errBoom),
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
 							want := ac(withConditions(runtimev1alpha1.ReconcileError(errors.Wrap(errBoom, errGCComponent))))
@@ -217,9 +237,9 @@ func TestReconciler(t *testing.T) {
 					WithRenderer(ComponentRenderFn(func(_ context.Context, _ *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
 						return []Workload{}, &v1alpha2.DependencyStatus{}, nil
 					})),
-					WithApplicator(WorkloadApplyFn(func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
+					WithApplicator(WorkloadApplyFns{ApplyFn: (func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
 						return nil
-					})),
+					})}),
 					WithGarbageCollector(GarbageCollectorFn(func(_ string, _ []v1alpha2.WorkloadStatus, _ []Workload) []unstructured.Unstructured {
 						return []unstructured.Unstructured{*workload}
 					})),
@@ -234,9 +254,28 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet:    test.NewMockGetFn(nil),
+						MockGet:    mockGetAppConfigFn,
 						MockDelete: test.NewMockDeleteFn(nil),
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
+							want := ac(
+								withConditions(runtimev1alpha1.ReconcileSuccess()),
+								withWorkloadStatuses(v1alpha2.WorkloadStatus{
+									ComponentName: componentName,
+									Reference: runtimev1alpha1.TypedReference{
+										APIVersion: workload.GetAPIVersion(),
+										Kind:       workload.GetKind(),
+										Name:       workload.GetName(),
+									},
+								}),
+								withDependencyStatus(depStatus),
+							)
+							if diff := cmp.Diff(want, o.(*v1alpha2.ApplicationConfiguration), cmpopts.EquateEmpty()); diff != "" {
+								t.Errorf("\nclient.Status().Update(): -want, +got:\n%s", diff)
+								return errUnexpectedStatus
+							}
+							return nil
+						}),
+						MockStatusPatch: test.NewMockStatusPatchFn(nil, func(o runtime.Object) error {
 							want := ac(
 								withConditions(runtimev1alpha1.ReconcileSuccess()),
 								withWorkloadStatuses(v1alpha2.WorkloadStatus{
@@ -261,9 +300,9 @@ func TestReconciler(t *testing.T) {
 					WithRenderer(ComponentRenderFn(func(_ context.Context, _ *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
 						return []Workload{{ComponentName: componentName, Workload: workload}}, &depStatus, nil
 					})),
-					WithApplicator(WorkloadApplyFn(func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
+					WithApplicator(WorkloadApplyFns{ApplyFn: (func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
 						return nil
-					})),
+					})}),
 					WithGarbageCollector(GarbageCollectorFn(func(_ string, _ []v1alpha2.WorkloadStatus, _ []Workload) []unstructured.Unstructured {
 						return []unstructured.Unstructured{*trait}
 					})),
@@ -278,7 +317,7 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet:    test.NewMockGetFn(nil),
+						MockGet:    mockGetAppConfigFn,
 						MockDelete: test.NewMockDeleteFn(nil),
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
 							want := ac(
@@ -296,9 +335,9 @@ func TestReconciler(t *testing.T) {
 					WithRenderer(ComponentRenderFn(func(_ context.Context, _ *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
 						return []Workload{{ComponentName: componentName, Workload: workload}}, &v1alpha2.DependencyStatus{}, nil
 					})),
-					WithApplicator(WorkloadApplyFn(func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
+					WithApplicator(WorkloadApplyFns{ApplyFn: (func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
 						return nil
-					})),
+					})}),
 					WithGarbageCollector(GarbageCollectorFn(func(_ string, _ []v1alpha2.WorkloadStatus, _ []Workload) []unstructured.Unstructured {
 						return []unstructured.Unstructured{*trait}
 					})),
@@ -322,7 +361,7 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet:    test.NewMockGetFn(nil),
+						MockGet:    mockGetAppConfigFn,
 						MockDelete: test.NewMockDeleteFn(nil),
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
 							want := ac(
@@ -345,15 +384,33 @@ func TestReconciler(t *testing.T) {
 							}
 							return nil
 						}),
+						MockStatusPatch: test.NewMockStatusPatchFn(nil, func(o runtime.Object) error {
+							want := ac(
+								withWorkloadStatuses(v1alpha2.WorkloadStatus{
+									ComponentName: componentName,
+									Reference: runtimev1alpha1.TypedReference{
+										APIVersion: workload.GetAPIVersion(),
+										Kind:       workload.GetKind(),
+										Name:       workload.GetName(),
+									},
+								}),
+							)
+							want.SetConditions(runtimev1alpha1.ReconcileSuccess())
+							if diff := cmp.Diff(want, o.(*v1alpha2.ApplicationConfiguration), cmpopts.EquateEmpty()); diff != "" {
+								t.Errorf("\nclient.Status().Update(): -want, +got:\n%s", diff)
+								return errUnexpectedStatus
+							}
+							return nil
+						}),
 					},
 				},
 				o: []ReconcilerOption{
 					WithRenderer(ComponentRenderFn(func(_ context.Context, _ *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
 						return []Workload{{ComponentName: componentName, Workload: workload}}, &v1alpha2.DependencyStatus{}, nil
 					})),
-					WithApplicator(WorkloadApplyFn(func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
+					WithApplicator(WorkloadApplyFns{ApplyFn: (func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
 						return nil
-					})),
+					})}),
 					WithGarbageCollector(GarbageCollectorFn(func(_ string, _ []v1alpha2.WorkloadStatus, _ []Workload) []unstructured.Unstructured {
 						return []unstructured.Unstructured{*trait}
 					})),
@@ -374,7 +431,7 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet:    test.NewMockGetFn(nil),
+						MockGet:    mockGetAppConfigFn,
 						MockDelete: test.NewMockDeleteFn(nil),
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
 							want := ac(
@@ -395,9 +452,9 @@ func TestReconciler(t *testing.T) {
 					WithRenderer(ComponentRenderFn(func(_ context.Context, _ *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
 						return []Workload{{ComponentName: componentName, Workload: workload}}, &v1alpha2.DependencyStatus{}, nil
 					})),
-					WithApplicator(WorkloadApplyFn(func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
+					WithApplicator(WorkloadApplyFns{ApplyFn: (func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
 						return nil
-					})),
+					})}),
 					WithGarbageCollector(GarbageCollectorFn(func(_ string, _ []v1alpha2.WorkloadStatus, _ []Workload) []unstructured.Unstructured {
 						return []unstructured.Unstructured{*trait}
 					})),
@@ -424,9 +481,27 @@ func TestReconciler(t *testing.T) {
 			args: args{
 				m: &mock.Manager{
 					Client: &test.MockClient{
-						MockGet:    test.NewMockGetFn(nil),
+						MockGet:    mockGetAppConfigFn,
 						MockDelete: test.NewMockDeleteFn(nil),
 						MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(o runtime.Object) error {
+							want := ac(
+								withConditions(runtimev1alpha1.ReconcileSuccess()),
+								withWorkloadStatuses(v1alpha2.WorkloadStatus{
+									ComponentName: componentName,
+									Reference: runtimev1alpha1.TypedReference{
+										APIVersion: workload.GetAPIVersion(),
+										Kind:       workload.GetKind(),
+										Name:       workload.GetName(),
+									},
+								}),
+							)
+							if diff := cmp.Diff(want, o.(*v1alpha2.ApplicationConfiguration), cmpopts.EquateEmpty()); diff != "" {
+								t.Errorf("\nclient.Status().Update(): -want, +got:\n%s", diff)
+								return errUnexpectedStatus
+							}
+							return nil
+						}),
+						MockStatusPatch: test.NewMockStatusPatchFn(nil, func(o runtime.Object) error {
 							want := ac(
 								withConditions(runtimev1alpha1.ReconcileSuccess()),
 								withWorkloadStatuses(v1alpha2.WorkloadStatus{
@@ -450,9 +525,9 @@ func TestReconciler(t *testing.T) {
 					WithRenderer(ComponentRenderFn(func(_ context.Context, _ *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
 						return []Workload{{ComponentName: componentName, Workload: workload}}, &v1alpha2.DependencyStatus{}, nil
 					})),
-					WithApplicator(WorkloadApplyFn(func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
+					WithApplicator(WorkloadApplyFns{ApplyFn: (func(_ context.Context, _ []v1alpha2.WorkloadStatus, _ []Workload, _ ...resource.ApplyOption) error {
 						return nil
-					})),
+					})}),
 					WithGarbageCollector(GarbageCollectorFn(func(_ string, _ []v1alpha2.WorkloadStatus, _ []Workload) []unstructured.Unstructured {
 						return []unstructured.Unstructured{*trait}
 					})),
@@ -468,11 +543,123 @@ func TestReconciler(t *testing.T) {
 				result: reconcile.Result{RequeueAfter: longWait},
 			},
 		},
+		"RegisterFinalizer": {
+			reason: "Register finalizer successfully",
+			args: args{
+				m: &mock.Manager{
+					Client: &test.MockClient{
+						MockGet: func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+							o, _ := obj.(*v1alpha2.ApplicationConfiguration)
+							*o = v1alpha2.ApplicationConfiguration{
+								Spec: v1alpha2.ApplicationConfigurationSpec{
+									Components: []v1alpha2.ApplicationConfigurationComponent{
+										{
+											ComponentName: componentName,
+											Scopes: []v1alpha2.ComponentScope{
+												{
+													ScopeReference: runtimev1alpha1.TypedReference{
+														APIVersion: "core.oam.dev/v1alpha2",
+														Kind:       "HealthScope",
+														Name:       "example-healthscope",
+													},
+												},
+											},
+										},
+									},
+								},
+							}
+							return nil
+						},
+						MockUpdate: test.NewMockUpdateFn(nil, func(o runtime.Object) error {
+							want := ac()
+							if diff := cmp.Diff(want.GetFinalizers(), o.(*v1alpha2.ApplicationConfiguration).GetFinalizers(), cmpopts.EquateEmpty()); diff != "" {
+								t.Errorf("\nclient.Update(): -want, +got:\n%s", diff)
+								return errUnexpectedStatus
+							}
+							return nil
+						}),
+						MockStatusUpdate: test.NewMockStatusUpdateFn(nil),
+					},
+				},
+			},
+			want: want{
+				result: reconcile.Result{},
+			},
+		},
+		"FinalizerSuccess": {
+			reason: "",
+			args: args{
+				m: &mock.Manager{
+					Client: &test.MockClient{
+						MockGet: func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+							o, _ := obj.(*v1alpha2.ApplicationConfiguration)
+							*o = v1alpha2.ApplicationConfiguration{ObjectMeta: metav1.ObjectMeta{
+								DeletionTimestamp: &now,
+								Finalizers:        []string{workloadScopeFinalizer},
+							}}
+							return nil
+						},
+						MockUpdate: test.NewMockUpdateFn(nil, func(o runtime.Object) error {
+							want := &v1alpha2.ApplicationConfiguration{ObjectMeta: metav1.ObjectMeta{
+								DeletionTimestamp: &now,
+								Finalizers:        []string{},
+							}}
+							if diff := cmp.Diff(want, o.(*v1alpha2.ApplicationConfiguration), cmpopts.EquateEmpty()); diff != "" {
+								t.Errorf("\nclient.Update(): -want, +got:\n%s", diff)
+								return errUnexpectedStatus
+							}
+							return nil
+						}),
+						MockStatusUpdate: test.NewMockStatusUpdateFn(nil),
+					},
+				},
+			},
+			want: want{
+				result: reconcile.Result{},
+			},
+		},
+		"FinalizerGetError": {
+			reason: "",
+			args: args{
+				m: &mock.Manager{
+					Client: &test.MockClient{
+						MockGet: func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+							o, _ := obj.(*v1alpha2.ApplicationConfiguration)
+							*o = v1alpha2.ApplicationConfiguration{ObjectMeta: metav1.ObjectMeta{
+								DeletionTimestamp: &now,
+								Finalizers:        []string{workloadScopeFinalizer},
+							}}
+							return nil
+						},
+						MockUpdate: test.NewMockUpdateFn(nil, func(o runtime.Object) error {
+							want := &v1alpha2.ApplicationConfiguration{ObjectMeta: metav1.ObjectMeta{
+								DeletionTimestamp: &now,
+								Finalizers:        []string{workloadScopeFinalizer},
+							}}
+							if diff := cmp.Diff(want, o.(*v1alpha2.ApplicationConfiguration), cmpopts.EquateEmpty()); diff != "" {
+								t.Errorf("\nclient.Update(): -want, +got:\n%s", diff)
+								return errUnexpectedStatus
+							}
+							return nil
+						}),
+						MockStatusUpdate: test.NewMockStatusUpdateFn(nil),
+					},
+				},
+				o: []ReconcilerOption{
+					WithApplicator(WorkloadApplyFns{FinalizeFn: func(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error {
+						return errBoom
+					}}),
+				},
+			},
+			want: want{
+				result: reconcile.Result{},
+			},
+		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := NewReconciler(tc.args.m, tc.args.o...)
+			r := NewReconciler(tc.args.m, nil, tc.args.o...)
 			got, err := r.Reconcile(reconcile.Request{})
 
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
@@ -677,6 +864,16 @@ func TestDependency(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	readyWorkloadArrayField := unreadyWorkload.DeepCopy()
+	err = unstructured.SetNestedStringSlice(readyWorkloadArrayField.Object, []string{"a"}, "spec", "key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = unstructured.SetNestedStringSlice(readyWorkloadArrayField.Object, []string{"b"}, "status", "key")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	unreadyTrait := &unstructured.Unstructured{}
 	unreadyTrait.SetAPIVersion("v1")
 	unreadyTrait.SetKind("Trait")
@@ -689,6 +886,8 @@ func TestDependency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	mapper := mock.NewMockDiscoveryMapper()
 
 	type args struct {
 		components []v1alpha2.ApplicationConfigurationComponent
@@ -719,8 +918,8 @@ func TestDependency(t *testing.T) {
 						FieldPath: "status.key",
 					}},
 				}},
-				wl:    unreadyWorkload,
-				trait: unreadyTrait,
+				wl:    unreadyWorkload.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
@@ -730,6 +929,7 @@ func TestDependency(t *testing.T) {
 				},
 				depStatus: &v1alpha2.DependencyStatus{
 					Unsatisfied: []v1alpha2.UnstaifiedDependency{{
+						Reason: "status.key not found in object",
 						From: v1alpha2.DependencyFromObject{
 							TypedReference: runtimev1alpha1.TypedReference{
 								APIVersion: unreadyWorkload.GetAPIVersion(),
@@ -765,13 +965,21 @@ func TestDependency(t *testing.T) {
 						FieldPath: "status.key",
 					}},
 				}},
-				wl:    readyWorkload,
-				trait: unreadyTrait,
+				wl:    readyWorkload.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
 					if ws[0].HasDep {
 						t.Error("Workload should be ready to apply")
+					}
+
+					s, _, err := unstructured.NestedString(ws[0].Workload.UnstructuredContent(), "spec", "key")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if diff := cmp.Diff(s, "test"); diff != "" {
+						t.Fatal(diff)
 					}
 				},
 				depStatus: &v1alpha2.DependencyStatus{},
@@ -793,8 +1001,8 @@ func TestDependency(t *testing.T) {
 						}},
 					}},
 				}},
-				wl:    unreadyWorkload,
-				trait: unreadyTrait,
+				wl:    unreadyWorkload.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
@@ -804,6 +1012,7 @@ func TestDependency(t *testing.T) {
 				},
 				depStatus: &v1alpha2.DependencyStatus{
 					Unsatisfied: []v1alpha2.UnstaifiedDependency{{
+						Reason: "status.key not found in object",
 						From: v1alpha2.DependencyFromObject{
 							TypedReference: runtimev1alpha1.TypedReference{
 								APIVersion: unreadyTrait.GetAPIVersion(),
@@ -840,13 +1049,21 @@ func TestDependency(t *testing.T) {
 						}},
 					}},
 				}},
-				wl:    unreadyWorkload,
-				trait: readyTrait,
+				wl:    unreadyWorkload.DeepCopy(),
+				trait: readyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
 					if ws[0].HasDep {
 						t.Error("Workload should be ready to apply")
+					}
+
+					s, _, err := unstructured.NestedString(ws[0].Workload.UnstructuredContent(), "spec", "key")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if diff := cmp.Diff(s, "test"); diff != "" {
+						t.Fatal(diff)
 					}
 				},
 				depStatus: &v1alpha2.DependencyStatus{},
@@ -870,8 +1087,8 @@ func TestDependency(t *testing.T) {
 						FieldPath: "status.key",
 					}},
 				}},
-				wl:    unreadyWorkload,
-				trait: unreadyTrait,
+				wl:    unreadyWorkload.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
@@ -881,6 +1098,7 @@ func TestDependency(t *testing.T) {
 				},
 				depStatus: &v1alpha2.DependencyStatus{
 					Unsatisfied: []v1alpha2.UnstaifiedDependency{{
+						Reason: "status.key not found in object",
 						From: v1alpha2.DependencyFromObject{
 							TypedReference: runtimev1alpha1.TypedReference{
 								APIVersion: unreadyWorkload.GetAPIVersion(),
@@ -919,19 +1137,27 @@ func TestDependency(t *testing.T) {
 						FieldPath: "status.key",
 					}},
 				}},
-				wl:    readyWorkload,
-				trait: unreadyTrait,
+				wl:    readyWorkload.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
 					if ws[0].Traits[0].HasDep {
 						t.Error("Trait should be ready to apply")
 					}
+
+					s, _, err := unstructured.NestedString(ws[0].Traits[0].Object.UnstructuredContent(), "spec", "key")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if diff := cmp.Diff(s, "test"); diff != "" {
+						t.Fatal(diff)
+					}
 				},
 				depStatus: &v1alpha2.DependencyStatus{},
 			},
 		},
-		"Trait depends on another unreadyTrait that's unready": {
+		"Trait depends on another Trait that's unready": {
 			args: args{
 				components: []v1alpha2.ApplicationConfigurationComponent{{
 					ComponentName: "test-component-sink",
@@ -949,8 +1175,8 @@ func TestDependency(t *testing.T) {
 						}},
 					}},
 				}},
-				wl:    unreadyWorkload,
-				trait: unreadyTrait,
+				wl:    unreadyWorkload.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
@@ -960,6 +1186,7 @@ func TestDependency(t *testing.T) {
 				},
 				depStatus: &v1alpha2.DependencyStatus{
 					Unsatisfied: []v1alpha2.UnstaifiedDependency{{
+						Reason: "status.key not found in object",
 						From: v1alpha2.DependencyFromObject{
 							TypedReference: runtimev1alpha1.TypedReference{
 								APIVersion: unreadyTrait.GetAPIVersion(),
@@ -980,7 +1207,7 @@ func TestDependency(t *testing.T) {
 				},
 			},
 		},
-		"Trait depends on another unreadyTrait that's ready": {
+		"Trait depends on another Trait that's ready": {
 			args: args{
 				components: []v1alpha2.ApplicationConfigurationComponent{{
 					ComponentName: "test-component-sink",
@@ -998,13 +1225,21 @@ func TestDependency(t *testing.T) {
 						}},
 					}},
 				}},
-				wl:    unreadyWorkload,
-				trait: readyTrait,
+				wl:    unreadyWorkload.DeepCopy(),
+				trait: readyTrait.DeepCopy(),
 			},
 			want: want{
 				verifyWorkloads: func(ws []Workload) {
 					if ws[0].Traits[0].HasDep {
 						t.Error("Trait should be ready to apply")
+					}
+
+					s, _, err := unstructured.NestedString(ws[0].Traits[0].Object.UnstructuredContent(), "spec", "key")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if diff := cmp.Diff(s, "test"); diff != "" {
+						t.Fatal(diff)
 					}
 				},
 				depStatus: &v1alpha2.DependencyStatus{},
@@ -1018,18 +1253,53 @@ func TestDependency(t *testing.T) {
 						ToFieldPaths: []string{"spec.key"},
 					}},
 				}},
-				wl:    unreadyWorkload,
-				trait: unreadyTrait,
+				wl:    unreadyWorkload.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
 			},
 			want: want{
 				err: ErrDataOutputNotExist,
 			},
+		},
+		"DataInput of array type should append": {
+			args: args{
+				components: []v1alpha2.ApplicationConfigurationComponent{{
+					ComponentName: "test-component-sink",
+					DataInputs: []v1alpha2.DataInput{{
+						ValueFrom:    v1alpha2.DataInputValueFrom{DataOutputName: "test-output"},
+						ToFieldPaths: []string{"spec.key"},
+					}},
+				}, {
+					ComponentName: "test-component-source",
+					DataOutputs: []v1alpha2.DataOutput{{
+						Name:      "test-output",
+						FieldPath: "status.key",
+					}},
+				}},
+				wl:    readyWorkloadArrayField.DeepCopy(),
+				trait: unreadyTrait.DeepCopy(),
+			},
+			want: want{
+				verifyWorkloads: func(ws []Workload) {
+					if ws[0].HasDep {
+						t.Error("Workload should be ready to apply")
+					}
+
+					l, _, err := unstructured.NestedStringSlice(ws[0].Workload.UnstructuredContent(), "spec", "key")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if diff := cmp.Diff(l, []string{"a", "b"}); diff != "" {
+						t.Fatal(diff)
+					}
+				},
+				depStatus: &v1alpha2.DependencyStatus{}},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			c := components{
+				dm: mapper,
 				client: &test.MockClient{
 					MockGet: test.MockGetFn(func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
 						if obj.GetObjectKind().GroupVersionKind().Kind == "Workload" {
@@ -1133,4 +1403,237 @@ func TestAddDataOutputsToDAG(t *testing.T) {
 	if diff := cmp.Diff(s.Conditions, outs[0].Conditions); diff != "" {
 		t.Errorf("didn't add conditions to source correctly: %s", diff)
 	}
+}
+
+func TestPatchExtraField(t *testing.T) {
+	tests := map[string]struct {
+		acStatus      *v1alpha2.ApplicationConfigurationStatus
+		acPatchStatus v1alpha2.ApplicationConfigurationStatus
+		wantedStatus  *v1alpha2.ApplicationConfigurationStatus
+	}{
+		"patch extra": {
+			acStatus: &v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						ComponentName:         "test",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+			acPatchStatus: v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						Status:                "we need to add this",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Status: "add this too",
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantedStatus: &v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						Status:                "we need to add this",
+						ComponentName:         "test",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Status: "add this too",
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"patch trait mismatch": {
+			acStatus: &v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						ComponentName:         "test",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+			acPatchStatus: v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						Status:                "we need to add this",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Status: "add this too",
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait2",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantedStatus: &v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						Status:                "we need to add this",
+						ComponentName:         "test",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"patch workload revision mismatch": {
+			acStatus: &v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						ComponentName:         "test",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+			acPatchStatus: v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						Status:                "we need to add this",
+						ComponentRevisionName: "test-v2",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Status: "add this too",
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantedStatus: &v1alpha2.ApplicationConfigurationStatus{
+				Workloads: []v1alpha2.WorkloadStatus{
+					{
+						ComponentName:         "test",
+						ComponentRevisionName: "test-v1",
+						Traits: []v1alpha2.WorkloadTrait{
+							{
+								Reference: runtimev1alpha1.TypedReference{
+									APIVersion: "apiVersion1",
+									Kind:       "kind1",
+									Name:       "trait1",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			patchExtraStatusField(tt.acStatus, tt.acPatchStatus)
+			if diff := cmp.Diff(tt.acStatus, tt.wantedStatus); diff != "" {
+				t.Errorf("didn't patch to the statsu correctly: %s", diff)
+			}
+
+		})
+	}
+}
+
+func TestUpdateStatus(t *testing.T) {
+
+	mockGetAppConfigFn := func(_ context.Context, key client.ObjectKey, obj runtime.Object) error {
+		if o, ok := obj.(*v1alpha2.ApplicationConfiguration); ok {
+			*o = v1alpha2.ApplicationConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "example-appconfig",
+					Generation: 1,
+				},
+				Spec: v1alpha2.ApplicationConfigurationSpec{
+					Components: []v1alpha2.ApplicationConfigurationComponent{
+						{
+							ComponentName: "example-component",
+							ParameterValues: []v1alpha2.ComponentParameterValue{
+								{
+									Name: "image",
+									Value: intstr.IntOrString{
+										StrVal: "wordpress:php7.3",
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v1alpha2.ApplicationConfigurationStatus{
+					ObservedGeneration: 0,
+				},
+			}
+		}
+		return nil
+	}
+
+	m := &mock.Manager{
+		Client: &test.MockClient{
+			MockGet: mockGetAppConfigFn,
+		},
+	}
+
+	r := NewReconciler(m, nil)
+
+	ac := &v1alpha2.ApplicationConfiguration{}
+	err := r.client.Get(context.Background(), types.NamespacedName{Name: "example-appconfig"}, ac)
+	assert.Equal(t, err, nil)
+	assert.Equal(t, ac.Status.ObservedGeneration, int64(0))
+
+	updateObservedGeneration(ac)
+	assert.Equal(t, ac.Status.ObservedGeneration, int64(1))
+
 }

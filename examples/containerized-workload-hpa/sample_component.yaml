@@ -1,0 +1,22 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: compent-hpa
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    metadata:
+      name: compent-hpa
+    spec:
+      containers:
+        - name: wordpress
+          image: wordpress:php7.2
+          ports:
+            - containerPort: 80
+              name: wordpress
+          resources:
+            cpu:
+              required: "50m"
+            memory:
+              required: "60Mi"

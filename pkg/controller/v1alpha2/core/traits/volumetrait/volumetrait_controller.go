@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/xishengcai/oam/pkg/controller"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,15 +41,20 @@ const (
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager, log logging.Logger) error {
-	reconcile := Reconcile{
+func Setup(mgr ctrl.Manager,args controller.Args, log logging.Logger) error {
+	dm, err := discoverymapper.New(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r := Reconcile{
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
 		log:             ctrl.Log.WithName("VolumeTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeTrait")),
 		Scheme:          mgr.GetScheme(),
+		dm: dm,
 	}
-	return reconcile.SetupWithManager(mgr, log)
+	return r.SetupWithManager(mgr, log)
 
 }
 
@@ -55,6 +62,7 @@ func Setup(mgr ctrl.Manager, log logging.Logger) error {
 type Reconcile struct {
 	client.Client
 	discovery.DiscoveryClient
+	dm     discoverymapper.DiscoveryMapper
 	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
@@ -113,7 +121,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Fetch the child resources list from the corresponding workload
-	resources, err := util.FetchWorkloadChildResources(ctx, mLog, r, workload)
+	resources, err := util.FetchWorkloadChildResources(ctx, mLog, r, r.dm, workload)
 	if err != nil {
 		mLog.Error(err, "Error while fetching the workload child resources", "workload", workload.UnstructuredContent())
 		r.record.Event(eventObj, event.Warning(util.ErrFetchChildResources, err))
@@ -202,8 +210,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 				pvcName := fmt.Sprintf("%s-%d-%s", res.GetName(), item.ContainerIndex, path.Name)
 				volumes = append(volumes, v1.Volume{
 					Name:         pvcName,
-					VolumeSource: v1.VolumeSource{PersistentVolumeClaim:
-						&v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
+					VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
 				})
 				volumeMount := v1.VolumeMount{
 					Name:      pvcName,
@@ -243,8 +250,8 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 				b, _ := json.Marshal(vmInterface)
 				_ = json.Unmarshal(b, &vms)
 				for _, o := range vms {
-					for _,v := range oldVolumes{
-						if v.Name == o.Name && v.PersistentVolumeClaim == nil{
+					for _, v := range oldVolumes {
+						if v.Name == o.Name && v.PersistentVolumeClaim == nil {
 							volumeMounts = append(volumeMounts, o)
 						}
 					}
