@@ -224,8 +224,8 @@ spec:
                         trait:
                           description: A Trait that will be created for the component
                           type: object
-                          x-kubernetes-embedded-resource: true
-                          x-kubernetes-preserve-unknown-fields: true
+                          
+                          
                       required:
                       - trait
                       type: object

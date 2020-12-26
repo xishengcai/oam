@@ -35,6 +35,9 @@ spec:
           spec:
             description: A ContainerizedWorkloadSpec defines the desired state of a ContainerizedWorkload.
             properties:
+              PointToGrayName:
+                description: old grey workload name need modify match selector
+                type: string
               arch:
                 description: CPUArchitecture required by this workload.
                 enum:
@@ -399,14 +402,22 @@ spec:
                   - name
                   type: object
                 type: array
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                type: object
               osType:
                 description: OperatingSystem required by this workload.
                 enum:
                 - linux
                 - windows
                 type: string
+              serviceMesh:
+                type: boolean
             required:
             - containers
+            - nodeSelector
+            - serviceMesh
             type: object
           status:
             description: A ContainerizedWorkloadStatus represents the observed state of a ContainerizedWorkload.
