@@ -18,13 +18,13 @@ package v1alpha2
 
 import (
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
-	//"github.com/xishengcai/oam/pkg/oam"
+	"github.com/xishengcai/oam/pkg/oam"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-//var _ oam.Trait = &IstioTrait{}
+var _ oam.Trait = &CanaryTrait{}
 
-type IstioTraitSpec struct {
+type CanaryTraitSpec struct {
 	WorkloadReference runtimev1alpha1.TypedReference `json:"workloadRef"`
 	Type       string            `json:"type"` // 灰度发布策略类型
 	Header     map[string]string `json:"header"`
@@ -32,30 +32,30 @@ type IstioTraitSpec struct {
 }
 
 
-// A IstioTraitStatus represents the observed state of a
-// IstioTrait.
-type IstioTraitStatus struct {
+// A CanaryTraitStatus represents the observed state of a
+// CanaryTrait.
+type CanaryTraitStatus struct {
 	runtimev1alpha1.ConditionedStatus `json:",inline"`
 }
 
 // +kubebuilder:object:root=true
 
-// A IstioTrait determines how many replicas a workload should have.
+// A CanaryTrait determines how many replicas a workload should have.
 // +kubebuilder:resource:categories={crossplane,oam}
 // +kubebuilder:subresource:status
-type IstioTrait struct {
+type CanaryTrait struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   IstioTraitSpec   `json:"spec,omitempty"`
-	Status IstioTraitStatus `json:"status,omitempty"`
+	Spec   CanaryTraitSpec   `json:"spec,omitempty"`
+	Status CanaryTraitStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// IstioTraitList contains a list of IstioTrait.
-type IstioTraitList struct {
+// CanaryTraitList contains a list of CanaryTrait.
+type CanaryTraitList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []IstioTrait `json:"items"`
+	Items           []CanaryTrait `json:"items"`
 }

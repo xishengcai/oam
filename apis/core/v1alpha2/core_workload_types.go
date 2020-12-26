@@ -384,7 +384,7 @@ type ContainerizedWorkloadSpec struct {
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
 
-	ServiceMesh     bool         `json:"serviceMesh"`  // 是否开启服务网格
+	ServiceMesh bool `json:"serviceMesh"` // 是否开启服务网格
 }
 
 // A ContainerizedWorkloadStatus represents the observed state of a

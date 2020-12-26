@@ -49,6 +49,7 @@ var (
 // Reconcile error strings.
 const (
 	labelKey = "containerizedworkload.oam.crossplane.io"
+	sidecarInjectionLabelKey= "istio-injection"
 
 	errNotContainerizedWorkload = "object is not a containerized workload"
 )
@@ -93,6 +94,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 				},
 			},
 		},
+	}
+
+	if cw.Spec.ServiceMesh{
+		d.Labels[sidecarInjectionLabelKey]="enabled"
 	}
 
 	for _, container := range cw.Spec.Containers {
