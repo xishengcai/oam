@@ -140,8 +140,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		},
 	)
 	r.record.Event(eventObj, event.Normal("childResource created",
-		fmt.Sprintf("Workload `%s` successfully server side patched a childResource",
-			workload.Name)))
+		fmt.Sprintf("Workload `%s` successfully server side patched a childResource", workload.Name)))
 
 	// garbage collect the deployment that we created but not needed
 	if err := r.cleanupResources(ctx, &workload, util.KindDeployment, uid); err != nil {
@@ -185,7 +184,9 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderService)))
 	}
-	if service != nil {
+
+	// PointToGrayName is gray workload
+	if service != nil && workload.Spec.PointToGrayName != ""{
 		// server side apply the service
 		if err := r.Patch(ctx, service, client.Apply, applyOpts...); err != nil {
 			log.Error(err, "Failed to apply a service")

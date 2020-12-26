@@ -116,6 +116,14 @@ var (
 	VolumeTraitGroupVersionKind = SchemeGroupVersion.WithKind(VolumeTraitKind)
 )
 
+// istio gray deploy trait
+var (
+	CanaryTraitKind             = reflect.TypeOf(CanaryTrait{}).Name()
+	CanaryTraitGroupKind        = schema.GroupKind{Group: Group, Kind: CanaryTraitKind}.String()
+	CanaryTraitKindAPIVersion   = CanaryTraitKind + "." + SchemeGroupVersion.String()
+	CanaryTraitGroupVersionKind = SchemeGroupVersion.WithKind(CanaryTraitKind)
+)
+
 func init() {
 	SchemeBuilder.Register(&WorkloadDefinition{}, &WorkloadDefinitionList{})
 	SchemeBuilder.Register(&TraitDefinition{}, &TraitDefinitionList{})
@@ -127,4 +135,5 @@ func init() {
 	SchemeBuilder.Register(&HealthScope{}, &HealthScopeList{})
 	SchemeBuilder.Register(&VolumeTrait{}, &VolumeTraitList{})
 	SchemeBuilder.Register(&HorizontalPodAutoscalerTrait{}, &HorizontalPodAutoscalerTraitList{})
+	SchemeBuilder.Register(&CanaryTrait{}, &CanaryTraitList{})
 }
