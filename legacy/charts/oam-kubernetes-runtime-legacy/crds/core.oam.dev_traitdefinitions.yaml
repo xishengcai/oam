@@ -58,7 +58,7 @@ spec:
             extension:
               description: Extension is used for extension needs by OAM platform builders
               type: object
-              x-kubernetes-preserve-unknown-fields: true
+              
             revisionEnabled:
               description: Revision indicates whether a trait is aware of component revision
               type: boolean

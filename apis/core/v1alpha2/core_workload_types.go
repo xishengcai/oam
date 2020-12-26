@@ -374,8 +374,17 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	CPUArchitecture *CPUArchitecture `json:"arch,omitempty"`
 
+	NodeSelector map[string]string `json:"nodeSelector"`
+
+	// old grey workload name
+	// need modify match selector
+	// +optional
+	PointToGrayName string `json:"PointToGrayName"`
+
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
+
+	ServiceMesh     bool         `json:"serviceMesh"`  // 是否开启服务网格
 }
 
 // A ContainerizedWorkloadStatus represents the observed state of a
