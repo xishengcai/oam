@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha2
 
 import (
+	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/traits/canarytrait"
 	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/traits/hpatrait"
 	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/traits/volumetrait"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -39,6 +40,7 @@ func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
 		healthscope.Setup,
 		hpatrait.Setup,
 		volumetrait.Setup,
+		canarytrait.Setup,
 	} {
 		if err := setup(mgr, args, l); err != nil {
 			return err

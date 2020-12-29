@@ -48,8 +48,8 @@ var (
 
 // Reconcile error strings.
 const (
-	labelKey = "containerizedworkload.oam.crossplane.io"
-	sidecarInjectionLabelKey= "istio-injection"
+	labelKey                 = "containerizedworkload.oam.crossplane.io"
+	sidecarInjectionLabelKey = "istio-injection"
 
 	errNotContainerizedWorkload = "object is not a containerized workload"
 )
@@ -60,8 +60,8 @@ type ChildWorkload struct {
 	metav1.ObjectMeta
 	StsSpec appsv1.StatefulSetSpec
 	DepSpec appsv1.DeploymentSpec
-
 }
+
 // TranslateContainerWorkload translates a ContainerizedWorkload into a Deployment.
 // nolint:gocyclo
 func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
@@ -70,35 +70,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 		return nil, errors.New(errNotContainerizedWorkload)
 	}
 
-	labels := map[string]string{
-		util.LabelAppId:       cw.Labels[util.LabelAppId],
-		util.LabelComponentId: cw.GetName(),
-	}
-	d := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       deploymentKind,
-			APIVersion: deploymentAPIVersion,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cw.GetName(),
-			Namespace: cw.GetNamespace(),
-			Labels:    labels,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-			},
-		},
-	}
 
-	if cw.Spec.ServiceMesh{
-		d.Labels[sidecarInjectionLabelKey]="enabled"
-	}
+	d := renderDeployment(cw)
+	setInjectLabel(cw, d)
+	modifyLabelSelector(cw.Spec.PointToGrayName,d)
 
 	for _, container := range cw.Spec.Containers {
 		if container.ImagePullSecret != nil {
@@ -140,7 +115,7 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 			}
 			if p.Protocol != nil {
 				port.Protocol = corev1.Protocol(*p.Protocol)
-			}else{
+			} else {
 				port.Protocol = corev1.ProtocolTCP
 			}
 			kubernetesContainer.Ports = append(kubernetesContainer.Ports, port)
@@ -169,7 +144,6 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 			}
 		}
 
-
 		/*
 			1.目录挂载
 				对vm 名称去重
@@ -190,7 +164,6 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 	}
 	return d, nil
 }
-
 
 func translateConfigFileToVolume(cf v1alpha2.ContainerConfigFile, wlName, containerName string) (v corev1.Volume, vm corev1.VolumeMount) {
 	mountPath, fileName := path.Split(cf.Path)
@@ -353,7 +326,7 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 	return svc, nil
 }
 
-func TransDepToSts(deploy *appsv1.Deployment)oam.Object{
+func TransDepToSts(deploy *appsv1.Deployment) oam.Object {
 	sts := &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       statefulKind,
@@ -362,9 +335,65 @@ func TransDepToSts(deploy *appsv1.Deployment)oam.Object{
 		ObjectMeta: deploy.ObjectMeta,
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: deploy.Name,
-			Selector: deploy.Spec.Selector,
-			Template: deploy.Spec.Template,
+			Selector:    deploy.Spec.Selector,
+			Template:    deploy.Spec.Template,
 		},
 	}
 	return sts
+}
+
+func setInjectLabel(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
+	if cw.Spec.ServiceMesh {
+		d.Spec.Template.Labels[sidecarInjectionLabelKey] = "enabled"
+	} else {
+		delete(d.Spec.Template.Labels, sidecarInjectionLabelKey)
+	}
+}
+
+func getVersion(pointToGrayName string) string {
+	if pointToGrayName == "" {
+		return oam.LabelVersionV1
+	} else {
+		return oam.LabelVersionV2
+	}
+}
+
+
+func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
+	if cw.Labels[util.LabelAppId] == ""{
+		panic("label app id is null")
+	}
+	labels := map[string]string{
+		util.LabelAppId:       cw.Labels[util.LabelAppId],
+		util.LabelComponentId: cw.GetName(),
+		oam.LabelVersion: getVersion(cw.Spec.PointToGrayName),
+	}
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       deploymentKind,
+			APIVersion: deploymentAPIVersion,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cw.GetName(),
+			Namespace: cw.GetNamespace(),
+			Labels:    labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+			},
+		},
+	}
+}
+
+// 如果是灰度组件，需要修改app component id
+func modifyLabelSelector(pointToGrayName string,d *appsv1.Deployment){
+	if pointToGrayName != ""{
+		d.Labels[util.LabelComponentId] = pointToGrayName
+	}
 }

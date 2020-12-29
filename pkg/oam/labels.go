@@ -32,6 +32,11 @@ const (
 	WorkloadTypeLabel = "workload.oam.dev/type"
 	// TraitTypeLabel indicates the type of the traitDefinition
 	TraitTypeLabel = "trait.oam.dev/type"
+
+	// serviceMesh must set version selector
+	LabelVersion = "version"
+	LabelVersionV1 = "v1"
+	LabelVersionV2 = "v2"
 )
 
 const (

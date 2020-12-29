@@ -43,8 +43,7 @@ import (
 // Reconcile error strings.
 const (
 	errRenderWorkload   = "cannot render workload"
-	errApplyDeployment  = "cannot apply the deployment"
-	errApplyStatefulSet = "cannot apply the statefulSet"
+	errApplyChildResource= "cannot apply the childResource"
 	errRenderService    = "cannot render service"
 	errApplyService     = "cannot apply the service"
 	errGcService        = "cannot gc the service"
@@ -119,9 +118,9 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//server side apply, only the fields we set are touched
 	if err := r.Patch(ctx, childObject, client.Apply, applyOpts...); err != nil {
 		log.Error(err, "Failed to apply to a deployment")
-		r.record.Event(eventObj, event.Warning(errApplyDeployment, err))
+		r.record.Event(eventObj, event.Warning(errApplyChildResource, err))
 		return util.ReconcileWaitResult,
-			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyDeployment)))
+			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyChildResource)))
 	}
 
 	var uid types.UID
@@ -145,7 +144,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// garbage collect the deployment that we created but not needed
 	if err := r.cleanupResources(ctx, &workload, util.KindDeployment, uid); err != nil {
 		log.Error(err, "Failed to clean up resources")
-		r.record.Event(eventObj, event.Warning(errApplyDeployment, err))
+		r.record.Event(eventObj, event.Warning(errApplyChildResource, err))
 	}
 	// configMap
 	configMapApplyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(workload.GetUID())}
@@ -186,7 +185,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// PointToGrayName is gray workload
-	if service != nil && workload.Spec.PointToGrayName != ""{
+	if service != nil{
 		// server side apply the service
 		if err := r.Patch(ctx, service, client.Apply, applyOpts...); err != nil {
 			log.Error(err, "Failed to apply a service")
