@@ -18,11 +18,11 @@ spec:
                 - type: Resource
                   resource:
                     name: memory
-                    targetAverageUtilization: 60
+                    targetAverageUtilization: 90
                 - type: Resource
                   resource:
                     name: cpu
-                    targetAverageUtilization: 50
+                    targetAverageUtilization: 90
                 - type: Object
                   object:
                     target:

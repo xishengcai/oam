@@ -37,7 +37,6 @@ const (
 )
 
 var (
-	oamAPIVersion   = oamv1alpha2.SchemeGroupVersion.String()
 	appsAPIVersion  = appsv1.SchemeGroupVersion.String()
 	GroupVersionHPA = v2beta1.SchemeGroupVersion.String()
 )
@@ -117,7 +116,7 @@ func (r *Reconciler) cleanUpLegacyHPAs(ctx context.Context, hpaTrait *oamv1alpha
 	var hpa v2beta1.HorizontalPodAutoscaler
 
 	for _, res := range hpaTrait.Status.Resources {
-		if res.Kind == "HorizontalPodAutoscaler" && res.APIVersion == autoscalingv1.SchemeGroupVersion.String() {
+		if res.Kind == KindHPA && res.APIVersion == autoscalingv1.SchemeGroupVersion.String() {
 			isLegacy := true
 			for _, i := range hpaUIDs {
 				if i == res.UID {
@@ -144,27 +143,6 @@ func (r *Reconciler) cleanUpLegacyHPAs(ctx context.Context, hpaTrait *oamv1alpha
 		}
 	}
 	return nil
-}
-
-// Determine whether the workload is K8S native resources or oam WorkloadDefinition
-func DetermineWorkloadType(ctx context.Context, log logr.Logger, r client.Reader,
-	workload *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
-	apiVersion := workload.GetAPIVersion()
-	switch apiVersion {
-	case oamAPIVersion:
-		log.Info("oam workload")
-		//return util.FetchWorkload(ctx, r, workload)
-		return nil, nil
-	case appsAPIVersion:
-		// k8s native resources
-		log.Info("workload is K8S native resources", "APIVersion", apiVersion)
-		return []*unstructured.Unstructured{workload}, nil
-	//TODO add support for openkruise workloads
-	case "":
-		return nil, errors.Errorf(fmt.Sprint("failed to get the workload APIVersion"))
-	default:
-		return nil, errors.Errorf(fmt.Sprint("This trait doesn't support this APIVersion", apiVersion))
-	}
 }
 
 func renderReference(resource *unstructured.Unstructured) (r v2beta1.CrossVersionObjectReference, isValidResource bool, err error) {
@@ -195,15 +173,11 @@ func renderReference(resource *unstructured.Unstructured) (r v2beta1.CrossVersio
 			APIVersion: appsAPIVersion,
 		}
 	case GVKStatefulSet:
-		var sts appsv1.Deployment
+		var sts appsv1.StatefulSet
 		bts, _ := json.Marshal(resource)
 		if err := json.Unmarshal(bts, &sts); err != nil {
 			return r, isValidResource, errors.Wrap(err, "Failed to convert an unstructured obj to a appsv1.statefulset")
 		}
-
-		// check spec.containers.resource
-		// if missing, raise an error
-		// for it's required by HPA
 		containers := sts.Spec.Template.Spec.Containers
 		for _, container := range containers {
 			if container.Resources.Requests == nil {
@@ -212,7 +186,7 @@ func renderReference(resource *unstructured.Unstructured) (r v2beta1.CrossVersio
 		}
 		isValidResource = true
 		r = v2beta1.CrossVersionObjectReference{
-			Kind:       KindDeployment,
+			Kind:       KindStatefulSet,
 			Name:       sts.GetName(),
 			APIVersion: appsAPIVersion,
 		}

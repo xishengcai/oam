@@ -22,6 +22,9 @@ require (
 	go.uber.org/zap v1.10.0
 	golang.org/x/tools v0.0.0-20200630223951-c138986dd9b9 // indirect
 	google.golang.org/appengine v1.6.5 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	istio.io/api v0.0.0-20201123152548-197f11e4ea09
+	istio.io/client-go v1.8.1
 	k8s.io/api v0.18.6
 	k8s.io/apiextensions-apiserver v0.18.6
 	k8s.io/apimachinery v0.18.6

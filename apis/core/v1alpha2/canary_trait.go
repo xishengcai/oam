@@ -25,17 +25,26 @@ import (
 var _ oam.Trait = &CanaryTrait{}
 
 type CanaryTraitSpec struct {
-	WorkloadReference runtimev1alpha1.TypedReference `json:"workloadRef"`
 	Type       string            `json:"type"` // 灰度发布策略类型
-	Header     map[string]string `json:"header"`
-	Proportion int               `json:"proportion"` //灰度发布流量比例, range: 0-100
+	// +optional
+	Header     map[string]string `json:"header,omitempty"`
+
+	// +optional
+	Proportion int32             `json:"proportion,omitempty"` //灰度发布流量比例, range: 0-100
+
+	// WorkloadReference to the workload this trait applies to.
+	// +optional
+	WorkloadReference runtimev1alpha1.TypedReference `json:"workloadRef"`
 }
 
 
 // A CanaryTraitStatus represents the observed state of a
 // CanaryTrait.
 type CanaryTraitStatus struct {
+	// +optional
 	runtimev1alpha1.ConditionedStatus `json:",inline"`
+	// Resources managed by this canary trait
+	Resources []runtimev1alpha1.TypedReference `json:"resources,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -48,6 +57,8 @@ type CanaryTrait struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   CanaryTraitSpec   `json:"spec,omitempty"`
+
+	// +optional
 	Status CanaryTraitStatus `json:"status,omitempty"`
 }
 

@@ -179,22 +179,6 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		traitDefs = append(traitDefs, *traitDef)
 		if t.GetKind() == util.KindVolumeTrait {
 			volumeTraitExit = true
-
-			if t.GetLabels() != nil {
-				continue
-			}
-			if ac.Generation == 1 {
-				t.SetLabels(map[string]string{
-					util.LabelKeyChildResource:     util.KindStatefulSet,
-					util.LabelKeyChildResourceName: w.GetName(),
-				})
-			} else {
-				t.SetLabels(map[string]string{
-					util.LabelKeyChildResource:     util.KindDeployment,
-					util.LabelKeyChildResourceName: w.GetName(),
-				})
-			}
-
 		}
 	}
 

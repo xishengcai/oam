@@ -374,16 +374,20 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	CPUArchitecture *CPUArchitecture `json:"arch,omitempty"`
 
+	// node select
+	// +optional
 	NodeSelector map[string]string `json:"nodeSelector"`
 
 	// old grey workload name
 	// need modify match selector
 	// +optional
-	PointToGrayName string `json:"PointToGrayName"`
+	PointToGrayName string `json:"pointToGrayName"`
 
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
 
+	// check is install istio
+	// +optional
 	ServiceMesh bool `json:"serviceMesh"` // 是否开启服务网格
 }
 
