@@ -287,6 +287,7 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 			Namespace: w.GetNamespace(),
 			Labels: map[string]string{
 				util.LabelAppId: w.GetLabels()[util.LabelAppId],
+				util.LabelComponentId: w.GetName(),
 			},
 		},
 		Spec: corev1.ServiceSpec{

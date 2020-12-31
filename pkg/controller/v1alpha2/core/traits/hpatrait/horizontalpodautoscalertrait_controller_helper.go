@@ -60,6 +60,7 @@ func (r *Reconciler) renderHPA(ctx context.Context, trait oam.Trait, resources [
 		if !isValidResource {
 			continue
 		}
+
 		// construct autoscalingv1/HPA obj
 		hpa := &v2beta1.HorizontalPodAutoscaler{
 			TypeMeta: metav1.TypeMeta{
