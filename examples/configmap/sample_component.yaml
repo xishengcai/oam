@@ -1,0 +1,25 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: oam-example-config
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    spec:
+      containers:
+        - name: nginx
+          image: nginx
+          config:
+          - path: /opt/xxx.log
+            value: dddddaaaaaa
+            subPath: true
+          - path: /opt/abc.log
+            value: xxx
+            subPath: true
+          - path: /etc/nginx/conf.d/abc.log
+            value: abc
+            subPath: true
+          - path: /etc/nginx/conf.d/b.log
+            value: abcdafsafsafsaf
+            subPath: true

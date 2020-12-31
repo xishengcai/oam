@@ -38,10 +38,10 @@ type VolumeMountItem struct {
 }
 
 type PathItem struct {
-	StorageClassName string             `json:"storageClassName"`
-	Size             string             `json:"size"`
-	Path             string             `json:"path"`
-	Name             string             `json:"name"`
+	StorageClassName string `json:"storageClassName"`
+	Size             string `json:"size"`
+	Path             string `json:"path"`
+	Name             string `json:"name"`
 }
 
 // A VolumeTraitStatus represents the observed state of a

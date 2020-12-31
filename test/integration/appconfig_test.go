@@ -39,6 +39,7 @@ import (
 
 	"github.com/xishengcai/oam/apis/core"
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/controller"
 	v1alph2controller "github.com/xishengcai/oam/pkg/controller/v1alpha2"
 )
 
@@ -239,7 +240,7 @@ func TestAppConfigController(t *testing.T) {
 
 	zl := zap.New(zap.UseDevMode(true))
 	log := logging.NewLogrLogger(zl.WithName("app-config"))
-	if err := v1alph2controller.Setup(i, log); err != nil {
+	if err := v1alph2controller.Setup(i, controller.Args{RevisionLimit: 10}, log); err != nil {
 		t.Fatal(err)
 	}
 

@@ -19,6 +19,7 @@ package healthscope
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -26,18 +27,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
+	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/controller"
 )
 
 const (
 	reconcileTimeout = 1 * time.Minute
-	shortWait        = 30 * time.Second
-	longWait         = 1 * time.Minute
+	longWait         = 10 * time.Second
 )
 
 // Reconcile error strings.
@@ -48,12 +49,11 @@ const (
 
 // Reconcile event reasons.
 const (
-	reasonHealthCheck       = "HealthCheck"
-	reasonHealthCheckFailed = "HealthCheckFailed"
+	reasonHealthCheck = "HealthCheck"
 )
 
 // Setup adds a controller that reconciles HealthScope.
-func Setup(mgr ctrl.Manager, l logging.Logger) error {
+func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
 	name := "oam/" + strings.ToLower(v1alpha2.HealthScopeGroupKind)
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -61,7 +61,8 @@ func Setup(mgr ctrl.Manager, l logging.Logger) error {
 		For(&v1alpha2.HealthScope{}).
 		Complete(NewReconciler(mgr,
 			WithLogger(l.WithValues("controller", name)),
-			WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name)))))
+			WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
+		))
 }
 
 // A Reconciler reconciles OAM Scopes by keeping track of the health status of components.
@@ -70,6 +71,13 @@ type Reconciler struct {
 
 	log    logging.Logger
 	record event.Recorder
+	// traitChecker represents checker fetching health condition from HealthCheckTrait
+	traitChecker WorloadHealthChecker
+	// checkers represents a set of built-in checkers
+	checkers []WorloadHealthChecker
+	// unknownChecker represents checker handling workloads that
+	// cannot be hanlded by traitChecker nor built-in checkers
+	unknownChecker WorloadHealthChecker
 }
 
 // A ReconcilerOption configures a Reconciler.
@@ -89,14 +97,39 @@ func WithRecorder(er event.Recorder) ReconcilerOption {
 	}
 }
 
+// WithTraitChecker adds health checker based on HealthCheckTrait
+func WithTraitChecker(c WorloadHealthChecker) ReconcilerOption {
+	return func(r *Reconciler) {
+		r.traitChecker = c
+	}
+}
+
+// WithChecker adds workload health checker
+func WithChecker(c WorloadHealthChecker) ReconcilerOption {
+	return func(r *Reconciler) {
+		if r.checkers == nil {
+			r.checkers = make([]WorloadHealthChecker, 0)
+		}
+		r.checkers = append(r.checkers, c)
+	}
+}
+
 // NewReconciler returns a Reconciler that reconciles HealthScope by keeping track of its healthstatus.
 func NewReconciler(m ctrl.Manager, o ...ReconcilerOption) *Reconciler {
 	r := &Reconciler{
-		client: m.GetClient(),
-		log:    logging.NewNopLogger(),
-		record: event.NewNopRecorder(),
+		client:       m.GetClient(),
+		log:          logging.NewNopLogger(),
+		record:       event.NewNopRecorder(),
+		traitChecker: WorkloadHealthCheckFn(CheckByHealthCheckTrait),
+		checkers: []WorloadHealthChecker{
+			WorkloadHealthCheckFn(CheckPodSpecWorkloadHealth),
+			WorkloadHealthCheckFn(CheckContainerziedWorkloadHealth),
+			WorkloadHealthCheckFn(CheckDeploymentHealth),
+			WorkloadHealthCheckFn(CheckStatefulsetHealth),
+			WorkloadHealthCheckFn(CheckDaemonsetHealth),
+		},
+		unknownChecker: WorkloadHealthCheckFn(CheckUnknownWorkload),
 	}
-
 	for _, ro := range o {
 		ro(r)
 	}
@@ -130,18 +163,96 @@ func (r *Reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 
 	log = log.WithValues("uid", hs.GetUID(), "version", hs.GetResourceVersion())
 
-	if err := UpdateHealthStatus(ctx, log, r.client, hs); err != nil {
-		log.Debug("Could not update health status", "error", err, "requeue-after", time.Now().Add(shortWait))
-		r.record.Event(hs, event.Warning(reasonHealthCheckFailed, err))
-		hs.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errUpdateHealthScopeStatus)))
-		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, hs), errUpdateHealthScopeStatus)
-	}
-
+	scopeCondition, wlConditions := r.GetScopeHealthStatus(ctx, hs)
 	log.Debug("Successfully ran health check", "scope", hs.Name)
 	r.record.Event(hs, event.Normal(reasonHealthCheck, "Successfully ran health check"))
 
 	elapsed := time.Since(start)
+	hs.Status.ScopeHealthCondition = scopeCondition
+	hs.Status.WorkloadHealthConditions = wlConditions
 
-	hs.SetConditions(v1alpha1.ReconcileSuccess())
 	return reconcile.Result{RequeueAfter: interval - elapsed}, errors.Wrap(r.client.Status().Update(ctx, hs), errUpdateHealthScopeStatus)
+}
+
+// GetScopeHealthStatus get the status of the healthscope based on workload resources.
+func (r *Reconciler) GetScopeHealthStatus(ctx context.Context, healthScope *v1alpha2.HealthScope) (ScopeHealthCondition, []*WorkloadHealthCondition) {
+	log := r.log.WithValues("get scope health status", healthScope.GetName())
+	scopeCondition := ScopeHealthCondition{
+		HealthStatus: StatusHealthy, // if no workload referenced, scope is healthy by default
+	}
+	scopeWLRefs := healthScope.Spec.WorkloadReferences
+	if len(scopeWLRefs) == 0 {
+		return scopeCondition, []*WorkloadHealthCondition{}
+	}
+
+	timeout := defaultTimeout
+	if healthScope.Spec.ProbeTimeout != nil {
+		timeout = time.Duration(*healthScope.Spec.ProbeTimeout) * time.Second
+	}
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// process workloads concurrently
+	workloadHealthConditionsC := make(chan *WorkloadHealthCondition, len(scopeWLRefs))
+	var wg sync.WaitGroup
+	wg.Add(len(scopeWLRefs))
+
+	for _, workloadRef := range scopeWLRefs {
+		go func(resRef runtimev1alpha1.TypedReference) {
+			defer wg.Done()
+			var wlHealthCondition *WorkloadHealthCondition
+
+			wlHealthCondition = r.traitChecker.Check(ctx, r.client, resRef, healthScope.GetNamespace())
+			if wlHealthCondition != nil {
+				log.Debug("get health condition from health check trait ", "workload", resRef, "healthCondition", wlHealthCondition)
+				// get healthCondition from HealthCheckTrait
+				workloadHealthConditionsC <- wlHealthCondition
+				return
+			}
+
+			for _, checker := range r.checkers {
+				wlHealthCondition = checker.Check(ctxWithTimeout, r.client, resRef, healthScope.GetNamespace())
+				if wlHealthCondition != nil {
+					log.Debug("get health condition from built-in checker", "workload", resRef, "healthCondition", wlHealthCondition)
+					// found matched checker and get health condition
+					workloadHealthConditionsC <- wlHealthCondition
+					return
+				}
+			}
+			// handle unknown workload
+			log.Debug("get unknown workload", "workload", resRef)
+			workloadHealthConditionsC <- r.unknownChecker.Check(ctx, r.client, resRef, healthScope.GetNamespace())
+		}(workloadRef)
+	}
+
+	go func() {
+		wg.Wait()
+		close(workloadHealthConditionsC)
+	}()
+
+	var healthyCount, unhealthyCount, unknownCount int64
+	workloadHealthConditions := []*WorkloadHealthCondition{}
+	for wlC := range workloadHealthConditionsC {
+		workloadHealthConditions = append(workloadHealthConditions, wlC)
+		switch wlC.HealthStatus { //nolint:exhaustive
+		case StatusHealthy:
+			healthyCount++
+		case StatusUnhealthy:
+			unhealthyCount++
+		case StatusUnknown:
+			unknownCount++
+		default:
+			unknownCount++
+		}
+	}
+	if unhealthyCount > 0 || unknownCount > 0 {
+		// ANY unhealthy or unknown worloads make the whole scope unhealthy
+		scopeCondition.HealthStatus = StatusUnhealthy
+	}
+	scopeCondition.Total = int64(len(scopeWLRefs))
+	scopeCondition.HealthyWorkloads = healthyCount
+	scopeCondition.UnhealthyWorkloads = unhealthyCount
+	scopeCondition.UnknownWorkloads = unknownCount
+
+	return scopeCondition, workloadHealthConditions
 }

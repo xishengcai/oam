@@ -18,25 +18,32 @@ package applicationconfiguration
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
-	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
+	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
+	"github.com/crossplane/crossplane-runtime/pkg/event"
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/pkg/resource"
+
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/controller"
+	"github.com/xishengcai/oam/pkg/oam"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
+	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
 const (
@@ -55,51 +62,59 @@ const (
 	errRenderComponents      = "cannot render components"
 	errApplyComponents       = "cannot apply components"
 	errGCComponent           = "cannot garbage collect components"
+	errFinalizeWorkloads     = "failed to finalize workloads"
 )
 
 // Reconcile event reasons.
 const (
-	reasonRenderComponents       = "RenderedComponents"
-	reasonExecutePrehook         = "ExecutePrehook"
-	reasonExecutePosthook        = "ExecutePosthook"
-	reasonApplyComponents        = "AppliedComponents"
-	reasonGGComponent            = "GarbageCollectedComponent"
-	reasonCannotExecutePrehooks  = "CannotExecutePrehooks"
-	reasonCannotExecutePosthooks = "CannotExecutePosthooks"
-	reasonCannotRenderComponents = "CannotRenderComponents"
-	reasonCannotApplyComponents  = "CannotApplyComponents"
-	reasonCannotGGComponents     = "CannotGarbageCollectComponents"
+	reasonRenderComponents        = "RenderedComponents"
+	reasonExecutePrehook          = "ExecutePrehook"
+	reasonExecutePosthook         = "ExecutePosthook"
+	reasonApplyComponents         = "AppliedComponents"
+	reasonGGComponent             = "GarbageCollectedComponent"
+	reasonCannotExecutePrehooks   = "CannotExecutePrehooks"
+	reasonCannotExecutePosthooks  = "CannotExecutePosthooks"
+	reasonCannotRenderComponents  = "CannotRenderComponents"
+	reasonCannotApplyComponents   = "CannotApplyComponents"
+	reasonCannotGGComponents      = "CannotGarbageCollectComponents"
+	reasonCannotFinalizeWorkloads = "CannotFinalizeWorkloads"
 )
 
 // Setup adds a controller that reconciles ApplicationConfigurations.
-func Setup(mgr ctrl.Manager, l logging.Logger) error {
+func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
+	dm, err := discoverymapper.New(mgr.GetConfig())
+	if err != nil {
+		return fmt.Errorf("create discovery dm fail %v", err)
+	}
 	name := "oam/" + strings.ToLower(v1alpha2.ApplicationConfigurationGroupKind)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		For(&v1alpha2.ApplicationConfiguration{}).
 		Watches(&source.Kind{Type: &v1alpha2.Component{}}, &ComponentHandler{
-			Client:     mgr.GetClient(),
-			Logger:     l,
-			AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
+			Client:        mgr.GetClient(),
+			Logger:        l,
+			RevisionLimit: args.RevisionLimit,
 		}).
-		Complete(NewReconciler(mgr,
+		Complete(NewReconciler(mgr, dm,
 			WithLogger(l.WithValues("controller", name)),
-			WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name)))))
+			WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
+			WithApplyOnceOnly(args.ApplyOnceOnly)))
 }
 
 // An OAMApplicationReconciler reconciles OAM ApplicationConfigurations by rendering and
 // instantiating their Components and Traits.
 type OAMApplicationReconciler struct {
-	client     client.Client
-	components ComponentRenderer
-	workloads  WorkloadApplicator
-	gc         GarbageCollector
-	scheme     *runtime.Scheme
-	log        logging.Logger
-	record     event.Recorder
-	preHooks   map[string]ControllerHooks
-	postHooks  map[string]ControllerHooks
+	client        client.Client
+	components    ComponentRenderer
+	workloads     WorkloadApplicator
+	gc            GarbageCollector
+	scheme        *runtime.Scheme
+	log           logging.Logger
+	record        event.Recorder
+	preHooks      map[string]ControllerHooks
+	postHooks     map[string]ControllerHooks
+	applyOnceOnly bool
 }
 
 // A ReconcilerOption configures a Reconciler.
@@ -156,22 +171,33 @@ func WithPosthook(name string, hook ControllerHooks) ReconcilerOption {
 	}
 }
 
+// WithApplyOnceOnly indicates whether workloads and traits should be
+// affected if no spec change is made in the ApplicationConfiguration.
+func WithApplyOnceOnly(applyOnceOnly bool) ReconcilerOption {
+	return func(r *OAMApplicationReconciler) {
+		r.applyOnceOnly = applyOnceOnly
+	}
+}
+
 // NewReconciler returns an OAMApplicationReconciler that reconciles ApplicationConfigurations
 // by rendering and instantiating their Components and Traits.
-func NewReconciler(m ctrl.Manager, o ...ReconcilerOption) *OAMApplicationReconciler {
+func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...ReconcilerOption) *OAMApplicationReconciler {
 	r := &OAMApplicationReconciler{
 		client: m.GetClient(),
 		scheme: m.GetScheme(),
 		components: &components{
-			client:     m.GetClient(),
-			appsClient: clientappv1.NewForConfigOrDie(m.GetConfig()),
-			params:     ParameterResolveFn(resolve),
-			workload:   ResourceRenderFn(renderWorkload),
-			trait:      ResourceRenderFn(renderTrait),
+			client:   m.GetClient(),
+			dm:       dm,
+			params:   ParameterResolveFn(resolve),
+			workload: ResourceRenderFn(renderWorkload),
+			trait:    ResourceRenderFn(renderTrait),
 		},
 		workloads: &workloads{
-			client:    resource.NewAPIPatchingApplicator(m.GetClient()),
-			rawClient: m.GetClient(),
+			// NOTE(roywang) PatchingApplicator@v0.10.0 only use "application/merge-patch+json" type patch
+			patchingClient: resource.NewAPIPatchingApplicator(m.GetClient()),
+			updatingClient: resource.NewAPIUpdatingApplicator(m.GetClient()),
+			rawClient:      m.GetClient(),
+			dm:             dm,
 		},
 		gc:        GarbageCollectorFn(eligible),
 		log:       logging.NewNopLogger(),
@@ -195,7 +221,7 @@ func NewReconciler(m ctrl.Manager, o ...ReconcilerOption) *OAMApplicationReconci
 // Components and Traits.
 func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reconcile.Result, returnErr error) {
 	log := r.log.WithValues("request", req)
-	//log.Debug("Reconciling")
+	log.Debug("Reconciling")
 
 	ctx, cancel := context.WithTimeout(context.Background(), reconcileTimeout)
 	defer cancel()
@@ -204,13 +230,31 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	if err := r.client.Get(ctx, req.NamespacedName, ac); err != nil {
 		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetAppConfig)
 	}
+	acPatch := ac.DeepCopy()
+
+	if ac.ObjectMeta.DeletionTimestamp.IsZero() {
+		if registerFinalizers(ac) {
+			log.Debug("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
+			return reconcile.Result{}, errors.Wrap(r.client.Update(ctx, ac), errUpdateAppConfigStatus)
+		}
+	} else {
+		if err := r.workloads.Finalize(ctx, ac); err != nil {
+			log.Debug("Failed to finalize workloads", "workloads status", ac.Status.Workloads,
+				"error", err, "requeue-after", result.RequeueAfter)
+			r.record.Event(ac, event.Warning(reasonCannotFinalizeWorkloads, err))
+			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errFinalizeWorkloads)))
+			return reconcile.Result{}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+		}
+		return reconcile.Result{}, errors.Wrap(r.client.Update(ctx, ac), errUpdateAppConfigStatus)
+	}
 
 	// execute the posthooks at the end no matter what
 	defer func() {
+		updateObservedGeneration(ac)
 		for name, hook := range r.postHooks {
 			exeResult, err := hook.Exec(ctx, ac, log)
 			if err != nil {
-				//log.Debug("Failed to execute post-hooks", "hook name", name, "error", err, "requeue-after", result.RequeueAfter)
+				log.Debug("Failed to execute post-hooks", "hook name", name, "error", err, "requeue-after", result.RequeueAfter)
 				r.record.Event(ac, event.Warning(reasonCannotExecutePosthooks, err))
 				ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePosthooks)))
 				result = exeResult
@@ -226,7 +270,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	for name, hook := range r.preHooks {
 		result, err := hook.Exec(ctx, ac, log)
 		if err != nil {
-			//log.Debug("Failed to execute pre-hooks", "hook name", name, "error", err, "requeue-after", result.RequeueAfter)
+			log.Debug("Failed to execute pre-hooks", "hook name", name, "error", err, "requeue-after", result.RequeueAfter)
 			r.record.Event(ac, event.Warning(reasonCannotExecutePrehooks, err))
 			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePrehooks)))
 			return result, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
@@ -238,21 +282,25 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 
 	workloads, depStatus, err := r.components.Render(ctx, ac)
 	if err != nil {
-		//log.Debug("Cannot render components", "error", err, "requeue-after", time.Now().Add(shortWait))
+		log.Info("Cannot render components", "error", err, "requeue-after", time.Now().Add(shortWait))
 		r.record.Event(ac, event.Warning(reasonCannotRenderComponents, err))
 		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errRenderComponents)))
 		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
 	}
-	//log.Debug("Successfully rendered components", "workloads", len(workloads))
+	log.Debug("Successfully rendered components", "workloads", len(workloads))
 	r.record.Event(ac, event.Normal(reasonRenderComponents, "Successfully rendered components", "workloads", strconv.Itoa(len(workloads))))
 
-	if err := r.workloads.Apply(ctx, ac.Status.Workloads, workloads, resource.MustBeControllableBy(ac.GetUID())); err != nil {
-		//log.Debug("Cannot apply components", "error", err, "requeue-after", time.Now().Add(shortWait))
+	applyOpts := []resource.ApplyOption{resource.MustBeControllableBy(ac.GetUID())}
+	if r.applyOnceOnly {
+		applyOpts = append(applyOpts, applyOnceOnly())
+	}
+	if err := r.workloads.Apply(ctx, ac.Status.Workloads, workloads, applyOpts...); err != nil {
+		log.Debug("Cannot apply components", "error", err, "requeue-after", time.Now().Add(shortWait))
 		r.record.Event(ac, event.Warning(reasonCannotApplyComponents, err))
 		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errApplyComponents)))
 		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
 	}
-	//log.Debug("Successfully applied components", "workloads", len(workloads))
+	log.Debug("Successfully applied components", "workloads", len(workloads))
 	r.record.Event(ac, event.Normal(reasonApplyComponents, "Successfully applied components", "workloads", strconv.Itoa(len(workloads))))
 
 	// Kubernetes garbage collection will (by default) reap workloads and traits
@@ -263,25 +311,21 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
 		e := e
 
-		//log := log.WithValues("kind", e.GetKind(), "name", e.GetName())
+		log := log.WithValues("kind", e.GetKind(), "name", e.GetName())
 		record := r.record.WithAnnotations("kind", e.GetKind(), "name", e.GetName())
 
 		if err := r.client.Delete(ctx, &e); resource.IgnoreNotFound(err) != nil {
-			//log.Debug("Cannot garbage collect component", "error", err, "requeue-after", time.Now().Add(shortWait))
+			log.Debug("Cannot garbage collect component", "error", err, "requeue-after", time.Now().Add(shortWait))
 			record.Event(ac, event.Warning(reasonCannotGGComponents, err))
 			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errGCComponent)))
 			return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
 		}
-		//log.Debug("Garbage collected resource")
+		log.Debug("Garbage collected resource")
 		record.Event(ac, event.Normal(reasonGGComponent, "Successfully garbage collected component"))
 	}
 
-	ac.Status.Workloads = make([]v1alpha2.WorkloadStatus, len(workloads))
-	for i := range workloads {
-		ac.Status.Workloads[i] = workloads[i].Status()
-	}
-
-	ac.SetConditions(v1alpha1.ReconcileSuccess())
+	// patch the final status on the client side, k8s sever can't merge them
+	r.updateStatus(ctx, ac, acPatch, workloads)
 
 	ac.Status.Dependency = v1alpha2.DependencyStatus{}
 	waitTime := longWait
@@ -289,7 +333,96 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		waitTime = dependCheckWait
 		ac.Status.Dependency = *depStatus
 	}
-	return reconcile.Result{RequeueAfter: waitTime}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+
+	// the posthook function will do the final status update
+	return reconcile.Result{RequeueAfter: waitTime}, nil
+}
+
+func (r *OAMApplicationReconciler) updateStatus(ctx context.Context, ac, acPatch *v1alpha2.ApplicationConfiguration, workloads []Workload) {
+	ac.Status.Workloads = make([]v1alpha2.WorkloadStatus, len(workloads))
+	historyWorkloads := make([]v1alpha2.HistoryWorkload, 0)
+	for i, w := range workloads {
+		ac.Status.Workloads[i] = workloads[i].Status()
+		if !w.RevisionEnabled {
+			continue
+		}
+		var ul unstructured.UnstructuredList
+		ul.SetKind(w.Workload.GetKind())
+		ul.SetAPIVersion(w.Workload.GetAPIVersion())
+		if err := r.client.List(ctx, &ul, client.MatchingLabels{oam.LabelAppName: ac.Name, oam.LabelAppComponent: w.ComponentName, oam.LabelOAMResourceType: oam.ResourceTypeWorkload}); err != nil {
+			continue
+		}
+		for _, v := range ul.Items {
+			if v.GetName() == w.ComponentRevisionName {
+				continue
+			}
+			// These workload exists means the component is under progress of rollout
+			// Trait will not work for these remaining workload
+			historyWorkloads = append(historyWorkloads, v1alpha2.HistoryWorkload{
+				Revision: v.GetName(),
+				Reference: v1alpha1.TypedReference{
+					APIVersion: v.GetAPIVersion(),
+					Kind:       v.GetKind(),
+					Name:       v.GetName(),
+					UID:        v.GetUID(),
+				},
+			})
+		}
+	}
+	ac.Status.HistoryWorkloads = historyWorkloads
+	// patch the extra fields in the status that is wiped by the Status() function
+	patchExtraStatusField(&ac.Status, acPatch.Status)
+	ac.SetConditions(v1alpha1.ReconcileSuccess())
+}
+
+func updateObservedGeneration(ac *v1alpha2.ApplicationConfiguration) {
+	if ac.Status.ObservedGeneration != ac.Generation {
+		ac.Status.ObservedGeneration = ac.Generation
+	}
+}
+
+func patchExtraStatusField(acStatus *v1alpha2.ApplicationConfigurationStatus, acPatchStatus v1alpha2.ApplicationConfigurationStatus) {
+	// patch the extra status back
+	for i := range acStatus.Workloads {
+		for _, w := range acPatchStatus.Workloads {
+			// find the workload in the old status
+			if acStatus.Workloads[i].ComponentRevisionName == w.ComponentRevisionName {
+				if len(w.Status) > 0 {
+					acStatus.Workloads[i].Status = w.Status
+				}
+				// find the trait
+				for j := range acStatus.Workloads[i].Traits {
+					for _, t := range w.Traits {
+						tr := acStatus.Workloads[i].Traits[j].Reference
+						if t.Reference.APIVersion == tr.APIVersion && t.Reference.Kind == tr.Kind && t.Reference.Name == tr.Name {
+							if len(t.Status) > 0 {
+								acStatus.Workloads[i].Traits[j].Status = t.Status
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// if any finalizers newly registered, return true
+func registerFinalizers(ac *v1alpha2.ApplicationConfiguration) bool {
+	newFinalizer := false
+	if !meta.FinalizerExists(&ac.ObjectMeta, workloadScopeFinalizer) && hasScope(ac) {
+		meta.AddFinalizer(&ac.ObjectMeta, workloadScopeFinalizer)
+		newFinalizer = true
+	}
+	return newFinalizer
+}
+
+func hasScope(ac *v1alpha2.ApplicationConfiguration) bool {
+	for _, c := range ac.Spec.Components {
+		if len(c.Scopes) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // A Workload produced by an OAM ApplicationConfiguration.
@@ -297,7 +430,7 @@ type Workload struct {
 	// ComponentName that produced this workload.
 	ComponentName string
 
-	//ComponentRevisionName of current component
+	// ComponentRevisionName of current component
 	ComponentRevisionName string
 
 	// A Workload object.
@@ -309,6 +442,9 @@ type Workload struct {
 	// Traits associated with this workload.
 	Traits []*Trait
 
+	// RevisionEnabled means multiple workloads of same component will possibly be alive.
+	RevisionEnabled bool
+
 	// Scopes associated with this workload.
 	Scopes []unstructured.Unstructured
 }
@@ -319,6 +455,9 @@ type Trait struct {
 
 	// HasDep indicates whether this resource has dependencies and unready to be applied.
 	HasDep bool
+
+	// Definition indicates the trait's definition
+	Definition v1alpha2.TraitDefinition
 }
 
 // Status produces the status of this workload and its traits, suitable for use
@@ -335,7 +474,10 @@ func (w Workload) Status() v1alpha2.WorkloadStatus {
 		Traits: make([]v1alpha2.WorkloadTrait, len(w.Traits)),
 		Scopes: make([]v1alpha2.WorkloadScope, len(w.Scopes)),
 	}
-	for i := range w.Traits {
+	for i, tr := range w.Traits {
+		if tr.Definition.Name == util.Dummy && tr.Definition.Spec.Reference.Name == util.Dummy {
+			acw.Traits[i].Message = util.DummyTraitMessage
+		}
 		acw.Traits[i].Reference = runtimev1alpha1.TypedReference{
 			APIVersion: w.Traits[i].Object.GetAPIVersion(),
 			Kind:       w.Traits[i].Object.GetKind(),
@@ -416,4 +558,45 @@ func eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []Workload) []un
 	}
 
 	return eligible
+}
+
+// GenerationUnchanged indicates the resource being applied has no generation changed
+// comparing to the existing one.
+type GenerationUnchanged struct{}
+
+func (e *GenerationUnchanged) Error() string {
+	return fmt.Sprint("apply-only-once enabled,",
+		"and detect generation in the annotation unchanged, will not apply.",
+		"Please ignore this error in other logic.")
+}
+
+func applyOnceOnly() resource.ApplyOption {
+	return func(ctx context.Context, current, desired runtime.Object) error {
+		// ApplyOption only works for update/patch operation and will be ignored
+		// if the object doesn't exist before.
+		c, _ := current.(metav1.Object)
+		d, _ := desired.(metav1.Object)
+		if c == nil || d == nil {
+			return errors.Errorf("invalid object being applied: %q ",
+				desired.GetObjectKind().GroupVersionKind())
+		}
+		cLabels, dLabels := c.GetLabels(), d.GetLabels()
+		if dLabels[oam.LabelOAMResourceType] == oam.ResourceTypeWorkload ||
+			dLabels[oam.LabelOAMResourceType] == oam.ResourceTypeTrait {
+			// check whether spec changes occur on the workload or trait,
+			// according to annotations and lables
+			if c.GetAnnotations()[oam.AnnotationAppGeneration] !=
+				d.GetAnnotations()[oam.AnnotationAppGeneration] {
+				return nil
+			}
+			if cLabels[oam.LabelAppComponentRevision] != dLabels[oam.LabelAppComponentRevision] ||
+				cLabels[oam.LabelAppComponent] != dLabels[oam.LabelAppComponent] ||
+				cLabels[oam.LabelAppName] != dLabels[oam.LabelAppName] {
+				return nil
+			}
+			// return an error to abort current apply
+			return &GenerationUnchanged{}
+		}
+		return nil
+	}
 }

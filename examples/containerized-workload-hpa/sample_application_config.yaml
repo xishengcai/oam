@@ -1,16 +1,16 @@
 apiVersion: core.oam.dev/v1alpha2
 kind: ApplicationConfiguration
 metadata:
-  name: example-appconfig
+  name: compent-hpa
 spec:
   components:
-    - componentName: example-hpa
+    - componentName: compent-hpa
       traits:
         - trait:
             apiVersion: core.oam.dev/v1alpha2
             kind: HorizontalPodAutoscalerTrait
             metadata:
-              name:  example-hpatrait
+              name:  example-hpa
             spec:
               minReplicas: 1
               maxReplicas: 5
@@ -23,3 +23,11 @@ spec:
                   resource:
                     name: cpu
                     targetAverageUtilization: 50
+                - type: Object
+                  object:
+                    target:
+                      kind: service
+                      name: compent-hpa
+                      apiVersion: v1
+                    metricName: istio_requests_per_min
+                    targetValue: "100"

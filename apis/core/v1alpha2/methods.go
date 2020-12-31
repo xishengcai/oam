@@ -92,6 +92,26 @@ func (hs *HealthScope) AddWorkloadReference(r runtimev1alpha1.TypedReference) {
 	hs.Spec.WorkloadReferences = append(hs.Spec.WorkloadReferences, r)
 }
 
+// GetCondition of this HorizontalPodAutoscalerTrait.
+func (h *HorizontalPodAutoscalerTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
+	return h.Status.GetCondition(ct)
+}
+
+// SetConditions of this HorizontalPodAutoscalerTrait.
+func (h *HorizontalPodAutoscalerTrait) SetConditions(c ...runtimev1alpha1.Condition) {
+	h.Status.SetConditions(c...)
+}
+
+// GetWorkloadReference of this HorizontalPodAutoscalerTrait.
+func (h *HorizontalPodAutoscalerTrait) GetWorkloadReference() runtimev1alpha1.TypedReference {
+	return h.Spec.WorkloadReference
+}
+
+// SetWorkloadReference of this HorizontalPodAutoscalerTrait.
+func (h *HorizontalPodAutoscalerTrait) SetWorkloadReference(r runtimev1alpha1.TypedReference) {
+	h.Spec.WorkloadReference = r
+}
+
 // GetCondition of this VolumeTrait.
 func (vt *VolumeTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
 	return vt.Status.GetCondition(ct)
@@ -112,22 +132,22 @@ func (vt *VolumeTrait) SetWorkloadReference(r runtimev1alpha1.TypedReference) {
 	vt.Spec.WorkloadReference = r
 }
 
-// GetCondition of this VolumeTrait.
-func (h *HorizontalPodAutoscalerTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
-	return h.Status.GetCondition(ct)
+// GetCondition of this CanaryTrait.
+func (ca *CanaryTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
+	return ca.Status.GetCondition(ct)
 }
 
-// SetConditions of this VolumeTrait.
-func (h *HorizontalPodAutoscalerTrait) SetConditions(c ...runtimev1alpha1.Condition) {
-	h.Status.SetConditions(c...)
+// SetConditions of this CanaryTrait.
+func (ca *CanaryTrait) SetConditions(c ...runtimev1alpha1.Condition) {
+	ca.Status.SetConditions(c...)
 }
 
-// GetWorkloadReference of this VolumeTrait.
-func (h *HorizontalPodAutoscalerTrait) GetWorkloadReference() runtimev1alpha1.TypedReference {
-	return h.Spec.WorkloadReference
+// GetWorkloadReference of this CanaryTrait.
+func (ca *CanaryTrait) GetWorkloadReference() runtimev1alpha1.TypedReference {
+	return ca.Spec.WorkloadReference
 }
 
-// SetWorkloadReference of this VolumeTrait.
-func (h *HorizontalPodAutoscalerTrait) SetWorkloadReference(r runtimev1alpha1.TypedReference) {
-	h.Spec.WorkloadReference = r
+// SetWorkloadReference of this CanaryTrait.
+func (ca *CanaryTrait) SetWorkloadReference(r runtimev1alpha1.TypedReference) {
+	ca.Spec.WorkloadReference = r
 }

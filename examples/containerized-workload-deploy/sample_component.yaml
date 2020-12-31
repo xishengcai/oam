@@ -2,6 +2,7 @@ apiVersion: core.oam.dev/v1alpha2
 kind: Component
 metadata:
   name: component-dep
+  namespace: default
 spec:
   workload:
     apiVersion: core.oam.dev/v1alpha2
@@ -20,7 +21,7 @@ spec:
               value: test
           resources:
             cpu:
-              required: "50m"
+              required: "60m"
             memory:
               required: "60Mi"
   parameters:

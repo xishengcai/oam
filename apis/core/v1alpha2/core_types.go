@@ -17,17 +17,21 @@ limitations under the License.
 package v1alpha2
 
 import (
-	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 )
 
 // A DefinitionReference refers to a CustomResourceDefinition by name.
 type DefinitionReference struct {
 	// Name of the referenced CustomResourceDefinition.
 	Name string `json:"name"`
+
+	// Version indicate which version should be used if CRD has multiple versions
+	// by default it will use the first one if not specified
+	Version string `json:"version,omitempty"`
 }
 
 // A ChildResourceKind defines a child Kubernetes resource kind with a selector
@@ -50,9 +54,20 @@ type WorkloadDefinitionSpec struct {
 	// ChildResourceKinds are the list of GVK of the child resources this workload generates
 	ChildResourceKinds []ChildResourceKind `json:"childResourceKinds,omitempty"`
 
+	// RevisionLabel indicates which label for underlying resources(e.g. pods) of this workload
+	// can be used by trait to create resource selectors(e.g. label selector for pods).
+	// +optional
+	RevisionLabel string `json:"revisionLabel,omitempty"`
+
+	// PodSpecPath indicates where/if this workload has K8s podSpec field
+	// if one workload has podSpec, trait can do lot's of assumption such as port, env, volume fields.
+	// +optional
+	PodSpecPath string `json:"podSpecPath,omitempty"`
+
 	// Extension is used for extension needs by OAM platform builders
 	// +optional
-	Extension *unstructured.Unstructured `json:"extension,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Extension *runtime.RawExtension `json:"extension,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -101,7 +116,8 @@ type TraitDefinitionSpec struct {
 
 	// Extension is used for extension needs by OAM platform builders
 	// +optional
-	Extension *unstructured.Unstructured `json:"extension,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Extension *runtime.RawExtension `json:"extension,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -142,7 +158,8 @@ type ScopeDefinitionSpec struct {
 
 	// Extension is used for extension needs by OAM platform builders
 	// +optional
-	Extension *unstructured.Unstructured `json:"extension,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Extension *runtime.RawExtension `json:"extension,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -182,9 +199,7 @@ type ComponentParameter struct {
 	// paths without a leading dot, for example 'spec.replicas'.
 	FieldPaths []string `json:"fieldPaths"`
 
-	// TODO(negz): Use +kubebuilder:default marker to default Required to false
-	// once we're generating v1 CRDs.
-
+	// +kubebuilder:default:=false
 	// Required specifies whether or not a value for this parameter must be
 	// supplied when authoring an ApplicationConfiguration.
 	// +optional
@@ -198,8 +213,9 @@ type ComponentParameter struct {
 // A ComponentSpec defines the desired state of a Component.
 type ComponentSpec struct {
 	// A Workload that will be created for each ApplicationConfiguration that
-	// includes this Component. Workloads must be defined by a
-	// WorkloadDefinition.
+	// includes this Component. Workload is an instance of a workloadDefinition.
+	// We either use the GVK info or a special "type" field in the workload to associate
+	// the content of the workload with its workloadDefinition
 	// +kubebuilder:validation:EmbeddedResource
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Workload runtime.RawExtension `json:"workload"`
@@ -213,15 +229,17 @@ type ComponentSpec struct {
 
 // A ComponentStatus represents the observed state of a Component.
 type ComponentStatus struct {
+	// The generation observed by the component controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration"`
+
 	runtimev1alpha1.ConditionedStatus `json:",inline"`
 
 	// LatestRevision of component
 	// +optional
 	LatestRevision *Revision `json:"latestRevision,omitempty"`
 
-	// TODO(negz): Maintain references to any ApplicationConfigurations that
-	// reference this component? Doing so would allow us to queue a reconcile
-	// for consuming ApplicationConfigurations when this Component changed.
+	// One Component should only be used by one AppConfig
 }
 
 // Revision has name and revision number
@@ -341,6 +359,9 @@ type WorkloadTrait struct {
 
 	// Reference to a trait created by an ApplicationConfiguration.
 	Reference runtimev1alpha1.TypedReference `json:"traitRef"`
+
+	// Message will allow controller to leave some additional information for this trait
+	Message string `json:"message,omitempty"`
 }
 
 // A ScopeStatus represents the state of a scope.
@@ -365,7 +386,7 @@ type WorkloadStatus struct {
 	// ComponentName that produced this workload.
 	ComponentName string `json:"componentName,omitempty"`
 
-	//ComponentRevisionName of current component
+	// ComponentRevisionName of current component
 	ComponentRevisionName string `json:"componentRevisionName,omitempty"`
 
 	// Reference to a workload created by an ApplicationConfiguration.
@@ -376,6 +397,15 @@ type WorkloadStatus struct {
 
 	// Scopes associated with this workload.
 	Scopes []WorkloadScope `json:"scopes,omitempty"`
+}
+
+// HistoryWorkload contain the old component revision that are still running
+type HistoryWorkload struct {
+	// Revision of this workload
+	Revision string `json:"revision,omitempty"`
+
+	// Reference to running workload.
+	Reference runtimev1alpha1.TypedReference `json:"workloadRef,omitempty"`
 }
 
 // A ApplicationStatus represents the state of the entire application.
@@ -390,10 +420,17 @@ type ApplicationConfigurationStatus struct {
 	// if it needs a single place to summarize the status of the entire application
 	Status ApplicationStatus `json:"status,omitempty"`
 
-	Dependency DependencyStatus `json:"dependency"`
+	Dependency DependencyStatus `json:"dependency,omitempty"`
 
 	// Workloads created by this ApplicationConfiguration.
 	Workloads []WorkloadStatus `json:"workloads,omitempty"`
+
+	// The generation observed by the appConfig controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration"`
+
+	// HistoryWorkloads will record history but still working revision workloads.
+	HistoryWorkloads []HistoryWorkload `json:"historyWorkloads,omitempty"`
 }
 
 // DependencyStatus represents the observed state of the dependency of
@@ -405,8 +442,9 @@ type DependencyStatus struct {
 // UnstaifiedDependency describes unsatisfied dependency flow between
 // one pair of objects.
 type UnstaifiedDependency struct {
-	From DependencyFromObject `json:"from"`
-	To   DependencyToObject   `json:"to"`
+	Reason string               `json:"reason"`
+	From   DependencyFromObject `json:"from"`
+	To     DependencyToObject   `json:"to"`
 }
 
 // DependencyFromObject represents the object that dependency data comes from.
@@ -459,6 +497,7 @@ type DataOutput struct {
 }
 
 // DataInput specifies a data input sink to an object.
+// If input is array, it will be appended to the target field paths.
 type DataInput struct {
 	// ValueFrom specifies the value source.
 	ValueFrom DataInputValueFrom `json:"valueFrom,omitempty"`
@@ -476,9 +515,24 @@ type DataInputValueFrom struct {
 // ConditionRequirement specifies the requirement to match a value.
 type ConditionRequirement struct {
 	Operator ConditionOperator `json:"op"`
-	Value    string            `json:"value"`
+
 	// +optional
+	// Value specifies an expected value
+	// This is mutually exclusive with ValueFrom
+	Value string `json:"value,omitempty"`
+	// +optional
+	// ValueFrom specifies expected value from AppConfig
+	// This is mutually exclusive with Value
+	ValueFrom ValueFrom `json:"valueFrom,omitempty"`
+
+	// +optional
+	// FieldPath specifies got value from workload/trait object
 	FieldPath string `json:"fieldPath,omitempty"`
+}
+
+// ValueFrom gets value from AppConfig object by specifying a path
+type ValueFrom struct {
+	FieldPath string `json:"fieldPath"`
 }
 
 // ConditionOperator specifies the operator to match a value.
