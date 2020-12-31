@@ -214,17 +214,11 @@ const (
 
 // A ContainerPort specifies a port that is exposed by a container.
 type ContainerPort struct {
-	// Name of this port. Must be unique within its container. Must be lowercase
-	// alphabetical characters.
-	// +kubebuilder:validation:Pattern=^[a-z]+$
 	Name string `json:"name"`
-
 	// Port number. Must be unique within its container.
 	Port int32 `json:"containerPort"`
-
 	// TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP
 	// once we're generating v1 CRDs.
-
 	// Protocol used by the server listening on this port.
 	// +kubebuilder:validation:Enum=TCP;UDP
 	// +optional
