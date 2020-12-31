@@ -42,6 +42,10 @@ spec:
                 format: int32
                 type: integer
               type:
+                description: Type used by the server listening on this port.
+                enum:
+                - traffic
+                - header
                 type: string
               workloadRef:
                 description: WorkloadReference to the workload this trait applies to.
@@ -63,8 +67,6 @@ spec:
                 - kind
                 - name
                 type: object
-            required:
-            - type
             type: object
           status:
             description: A CanaryTraitStatus represents the observed state of a CanaryTrait.

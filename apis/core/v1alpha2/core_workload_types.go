@@ -374,14 +374,14 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	CPUArchitecture *CPUArchitecture `json:"arch,omitempty"`
 
-	// node select
+	// NodeSelector required by this workload.
 	// +optional
-	NodeSelector map[string]string `json:"nodeSelector"`
+	NodeSelector *map[string]string `json:"nodeSelector,omitempty"`
 
 	// old grey workload name
 	// need modify match selector
 	// +optional
-	PointToGrayName string `json:"pointToGrayName"`
+	PointToGrayName *string `json:"pointToGrayName,omitempty"`
 
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`

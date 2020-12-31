@@ -74,6 +74,7 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 	d := renderDeployment(cw)
 	setInjectLabel(cw, d)
 	modifyLabelSelector(cw.Spec.PointToGrayName,d)
+	setNodeSelect(cw, d)
 
 	for _, container := range cw.Spec.Containers {
 		if container.ImagePullSecret != nil {
@@ -367,7 +368,7 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
 	labels := map[string]string{
 		util.LabelAppId:       cw.Labels[util.LabelAppId],
 		util.LabelComponentId: cw.GetName(),
-		oam.LabelVersion: getVersion(cw.Spec.PointToGrayName),
+		oam.LabelVersion: getVersion(*cw.Spec.PointToGrayName),
 	}
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -393,8 +394,14 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
 }
 
 // 如果是灰度组件，需要修改app component id
-func modifyLabelSelector(pointToGrayName string,d *appsv1.Deployment){
-	if pointToGrayName != ""{
-		d.Labels[util.LabelComponentId] = pointToGrayName
+func modifyLabelSelector(pointToGrayName *string,d *appsv1.Deployment){
+	if pointToGrayName != nil{
+		d.Labels[util.LabelComponentId] = *pointToGrayName
+	}
+}
+
+func setNodeSelect(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment){
+	if cw.Spec.NodeSelector != nil{
+		d.Spec.Template.Spec.NodeSelector = *cw.Spec.NodeSelector
 	}
 }

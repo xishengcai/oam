@@ -402,7 +402,7 @@ spec:
               nodeSelector:
                 additionalProperties:
                   type: string
-                description: node select
+                description: NodeSelector required by this workload.
                 type: object
               osType:
                 description: OperatingSystem required by this workload.
