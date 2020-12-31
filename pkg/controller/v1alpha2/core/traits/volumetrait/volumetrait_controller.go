@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/discovery"
-	"k8s.io/kubectl/pkg/util/openapi"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -172,18 +171,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		Controller:         &isController,
 		BlockOwnerDeletion: &bod,
 	}
-	// prepare for openApi schema check
-	schemaDoc, err := r.DiscoveryClient.OpenAPISchema()
-	if err != nil {
-		return util.ReconcileWaitResult,
-			util.PatchCondition(ctx, r, volumeTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errQueryOpenAPI)))
-	}
-	_, err = openapi.NewOpenAPIData(schemaDoc)
-	if err != nil {
-		return util.ReconcileWaitResult,
-			util.PatchCondition(ctx, r, volumeTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errQueryOpenAPI)))
-	}
-
 	for _, res := range resources {
 
 		if res.GetKind() != util.KindStatefulSet && res.GetKind() != util.KindDeployment {

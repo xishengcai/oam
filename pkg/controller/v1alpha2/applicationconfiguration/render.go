@@ -136,6 +136,7 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		return nil, errors.Wrapf(err, errFmtResolveParams, acc.ComponentName)
 	}
 
+	// 每次都是重新生成workload
 	w, err := r.workload.Render(c.Spec.Workload.Raw, p...)
 	if err != nil {
 		return nil, errors.Wrapf(err, errFmtRenderWorkload, acc.ComponentName)
@@ -172,7 +173,6 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		}
 		util.AddLabels(t, compInfoLabels)
 		util.AddAnnotations(t, compInfoAnnotations)
-
 		// pass through labels and annotation from app-config to trait
 		util.PassLabelAndAnnotation(ac, t)
 		traits = append(traits, &Trait{Object: *t, Definition: *traitDef})
@@ -182,24 +182,19 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		}
 	}
 
-	if ac.Generation == 1 {
-		if volumeTraitExit {
-			w.SetLabels(map[string]string{
-				util.LabelKeyChildResource: util.KindStatefulSet,
-				util.LabelAppId:            ac.Name,
-			})
-		} else {
-			w.SetLabels(map[string]string{
-				util.LabelKeyChildResource: util.KindDeployment,
-				util.LabelAppId:            ac.Name,
-			})
-		}
-	}
+	util.AddLabels(w,map[string]string{util.LabelAppId:ac.Name})
 
 	existingWorkload, err := r.getExistingWorkload(ctx, ac, c, w)
 	if err != nil {
 		return nil, err
 	}
+	if existingWorkload.Object == nil{
+		if volumeTraitExit {
+			util.AddLabels(w,map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
+		} else {
+			util.AddLabels(w,map[string]string{util.LabelKeyChildResource: util.KindDeployment})}
+	}
+
 
 	if err := SetWorkloadInstanceName(traitDefs, w, c, existingWorkload); err != nil {
 		return nil, err

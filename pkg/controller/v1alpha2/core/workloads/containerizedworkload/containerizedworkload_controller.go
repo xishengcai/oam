@@ -122,7 +122,6 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyChildResource)))
 	}
-
 	var uid types.UID
 	switch workload.Labels[util.LabelKeyChildResource] {
 	case util.KindDeployment:
