@@ -288,11 +288,13 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 			Labels: map[string]string{
 				util.LabelAppId:       w.GetLabels()[util.LabelAppId],
 				util.LabelComponentId: w.GetName(),
+				"app": w.GetLabels()[util.LabelAppId],
 			},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
 				util.LabelComponentId: w.GetName(),
+				"app": w.GetLabels()[util.LabelAppId],
 			},
 			Ports: []corev1.ServicePort{},
 			Type:  corev1.ServiceTypeClusterIP,
@@ -360,12 +362,10 @@ func getVersion(pointToGrayName string) string {
 }
 
 func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
-	if cw.Labels[util.LabelAppId] == "" {
-		panic("label app id is null")
-	}
 	labels := map[string]string{
 		util.LabelAppId:       cw.Labels[util.LabelAppId],
 		util.LabelComponentId: cw.GetName(),
+		"app": cw.GetLabels()[util.LabelAppId],
 	}
 	if cw.Spec.PointToGrayName != nil {
 		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)
@@ -379,6 +379,9 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 			Name:      cw.GetName(),
 			Namespace: cw.GetNamespace(),
 			Labels:    labels,
+			Annotations: map[string]string{
+				"logCollect": "true",
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
