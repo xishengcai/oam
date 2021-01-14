@@ -79,6 +79,9 @@ spec:
                         path:
                           description: Path within the container at which the configuration file should be written.
                           type: string
+                        subPath:
+                          description: Path within the volume from which the container's volume should be mounted. Defaults to "" (volume's root).
+                          type: boolean
                         value:
                           description: Value that should be written to the configuration file.
                           type: string
@@ -209,11 +212,9 @@ spec:
                           format: int32
                           type: integer
                         name:
-                          description: Name of this port. Must be unique within its container. Must be lowercase alphabetical characters.
-                          pattern: ^[a-z]+$
                           type: string
                         protocol:
-                          description: Protocol used by the server listening on this port.
+                          description: 'TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP once we''re generating v1 CRDs. Protocol used by the server listening on this port.'
                           enum:
                           - TCP
                           - UDP
@@ -396,12 +397,23 @@ spec:
                 - name
                 type: object
               type: array
+            nodeSelector:
+              additionalProperties:
+                type: string
+              description: NodeSelector required by this workload.
+              type: object
             osType:
               description: OperatingSystem required by this workload.
               enum:
               - linux
               - windows
               type: string
+            pointToGrayName:
+              description: old grey workload name need modify match selector
+              type: string
+            serviceMesh:
+              description: check is install istio
+              type: boolean
           required:
           - containers
           type: object

@@ -70,10 +70,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 		return nil, errors.New(errNotContainerizedWorkload)
 	}
 
-
 	d := renderDeployment(cw)
 	setInjectLabel(cw, d)
-	modifyLabelSelector(cw.Spec.PointToGrayName,d)
+	modifyLabelSelector(cw.Spec.PointToGrayName, d)
+	setNodeSelect(cw, d)
 
 	for _, container := range cw.Spec.Containers {
 		if container.ImagePullSecret != nil {
@@ -286,13 +286,15 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 			Name:      w.GetName(),
 			Namespace: w.GetNamespace(),
 			Labels: map[string]string{
-				util.LabelAppId: w.GetLabels()[util.LabelAppId],
+				util.LabelAppId:       w.GetLabels()[util.LabelAppId],
 				util.LabelComponentId: w.GetName(),
+				"app": w.GetLabels()[util.LabelAppId],
 			},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
 				util.LabelComponentId: w.GetName(),
+				"app": w.GetLabels()[util.LabelAppId],
 			},
 			Ports: []corev1.ServicePort{},
 			Type:  corev1.ServiceTypeClusterIP,
@@ -359,15 +361,14 @@ func getVersion(pointToGrayName string) string {
 	}
 }
 
-
-func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
-	if cw.Labels[util.LabelAppId] == ""{
-		panic("label app id is null")
-	}
+func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 	labels := map[string]string{
 		util.LabelAppId:       cw.Labels[util.LabelAppId],
 		util.LabelComponentId: cw.GetName(),
-		oam.LabelVersion: getVersion(cw.Spec.PointToGrayName),
+		"app": cw.GetLabels()[util.LabelAppId],
+	}
+	if cw.Spec.PointToGrayName != nil {
+		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)
 	}
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -378,6 +379,9 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
 			Name:      cw.GetName(),
 			Namespace: cw.GetNamespace(),
 			Labels:    labels,
+			Annotations: map[string]string{
+				"logCollect": "true",
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -393,8 +397,14 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
 }
 
 // 如果是灰度组件，需要修改app component id
-func modifyLabelSelector(pointToGrayName string,d *appsv1.Deployment){
-	if pointToGrayName != ""{
-		d.Labels[util.LabelComponentId] = pointToGrayName
+func modifyLabelSelector(pointToGrayName *string, d *appsv1.Deployment) {
+	if pointToGrayName != nil {
+		d.Labels[util.LabelComponentId] = *pointToGrayName
+	}
+}
+
+func setNodeSelect(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
+	if cw.Spec.NodeSelector != nil {
+		d.Spec.Template.Spec.NodeSelector = *cw.Spec.NodeSelector
 	}
 }

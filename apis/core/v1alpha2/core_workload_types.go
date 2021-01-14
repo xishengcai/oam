@@ -214,17 +214,11 @@ const (
 
 // A ContainerPort specifies a port that is exposed by a container.
 type ContainerPort struct {
-	// Name of this port. Must be unique within its container. Must be lowercase
-	// alphabetical characters.
-	// +kubebuilder:validation:Pattern=^[a-z]+$
 	Name string `json:"name"`
-
 	// Port number. Must be unique within its container.
 	Port int32 `json:"containerPort"`
-
 	// TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP
 	// once we're generating v1 CRDs.
-
 	// Protocol used by the server listening on this port.
 	// +kubebuilder:validation:Enum=TCP;UDP
 	// +optional
@@ -374,14 +368,14 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	CPUArchitecture *CPUArchitecture `json:"arch,omitempty"`
 
-	// node select
+	// NodeSelector required by this workload.
 	// +optional
-	NodeSelector map[string]string `json:"nodeSelector"`
+	NodeSelector *map[string]string `json:"nodeSelector,omitempty"`
 
 	// old grey workload name
 	// need modify match selector
 	// +optional
-	PointToGrayName string `json:"pointToGrayName"`
+	PointToGrayName *string `json:"pointToGrayName,omitempty"`
 
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`

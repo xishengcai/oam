@@ -212,11 +212,9 @@ spec:
                             format: int32
                             type: integer
                           name:
-                            description: Name of this port. Must be unique within its container. Must be lowercase alphabetical characters.
-                            pattern: ^[a-z]+$
                             type: string
                           protocol:
-                            description: Protocol used by the server listening on this port.
+                            description: 'TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP once we''re generating v1 CRDs. Protocol used by the server listening on this port.'
                             enum:
                             - TCP
                             - UDP
@@ -402,7 +400,7 @@ spec:
               nodeSelector:
                 additionalProperties:
                   type: string
-                description: node select
+                description: NodeSelector required by this workload.
                 type: object
               osType:
                 description: OperatingSystem required by this workload.
