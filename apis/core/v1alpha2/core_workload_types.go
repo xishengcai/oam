@@ -196,6 +196,11 @@ type ContainerConfigFile struct {
 	// container.
 	// +optional
 	FromSecret *SecretKeySelector `json:"fromSecret,omitempty"`
+
+	// Path within the volume from which the container's volume should be mounted.
+	// Defaults to "" (volume's root).
+	// +optional
+	SubPath bool `json:"subPath,omitempty"`
 }
 
 // A TransportProtocol represents a transport layer protocol.
@@ -209,16 +214,11 @@ const (
 
 // A ContainerPort specifies a port that is exposed by a container.
 type ContainerPort struct {
-	// Name of this port. Must be unique within its container. Must be lowercase
-	// alphabetical characters.
 	Name string `json:"name"`
-
 	// Port number. Must be unique within its container.
 	Port int32 `json:"containerPort"`
-
 	// TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP
 	// once we're generating v1 CRDs.
-
 	// Protocol used by the server listening on this port.
 	// +kubebuilder:validation:Enum=TCP;UDP
 	// +optional
@@ -368,8 +368,21 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	CPUArchitecture *CPUArchitecture `json:"arch,omitempty"`
 
+	// NodeSelector required by this workload.
+	// +optional
+	NodeSelector *map[string]string `json:"nodeSelector,omitempty"`
+
+	// old grey workload name
+	// need modify match selector
+	// +optional
+	PointToGrayName *string `json:"pointToGrayName,omitempty"`
+
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
+
+	// check is install istio
+	// +optional
+	ServiceMesh bool `json:"serviceMesh"` // 是否开启服务网格
 }
 
 // A ContainerizedWorkloadStatus represents the observed state of a

@@ -4,20 +4,70 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ include "oam-kubernetes-runtime.serviceAccountName" . }}
-  namespace: {{ .Release.Namespace }}
   labels:
-  {{ include "oam-kubernetes-runtime.labels" . | nindent 4 }}
-  {{- end }}
----
+  {{- include "oam-kubernetes-runtime.labels" . | nindent 4 }}
+{{- end }}
 
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "oam-kubernetes-runtime.fullname" . }}
+  labels:
+  {{- include "oam-kubernetes-runtime.labels" . | nindent 4 }}
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.oam.dev/aggregate-to-controller: "true"
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "oam-kubernetes-runtime.fullname" . }}:system:aggregate-to-controller
+  labels:
+    {{- include "oam-kubernetes-runtime.labels" . | nindent 4 }}
+    rbac.oam.dev/aggregate-to-controller: "true"
+rules:
+- apiGroups:
+  - core.oam.dev
+  resources:
+  - "*"
+  verbs:
+  - "*"
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - controllerrevisions
+  verbs:
+  - "*"
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - services
+  - configmaps
+  verbs:
+  - "*"
+
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: manager-rolebinding
+  name: {{ include "oam-kubernetes-runtime.fullname" . }}
+  labels:
+  {{- include "oam-kubernetes-runtime.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: "cluster-admin"
+  name: {{ include "oam-kubernetes-runtime.fullname" . }}
 subjects:
   - kind: ServiceAccount
     name: {{ include "oam-kubernetes-runtime.serviceAccountName" . }}
@@ -28,8 +78,9 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: leader-election-role
-  namespace: {{ .Release.Namespace }}
+  name: {{ include "oam-kubernetes-runtime.fullname" . }}-leader-election
+  labels:
+  {{- include "oam-kubernetes-runtime.labels" . | nindent 4 }}
 rules:
   - apiGroups:
       - ""
@@ -62,12 +113,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: leader-election-rolebinding
-  namespace: {{ .Release.Namespace }}
+  name: {{ include "oam-kubernetes-runtime.fullname" . }}-leader-election
+  labels:
+  {{- include "oam-kubernetes-runtime.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: leader-election-role
+  name: {{ include "oam-kubernetes-runtime.fullname" . }}-leader-election
 subjects:
   - kind: ServiceAccount
     name: {{ include "oam-kubernetes-runtime.serviceAccountName" . }}
@@ -77,7 +129,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "oam-kubernetes-runtime.fullname" . }}
-  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "oam-kubernetes-runtime.labels" . | nindent 4 }}
 spec:
@@ -100,6 +151,7 @@ spec:
           args:
             - "--metrics-addr=:8080"
             - "--enable-leader-election"
+            - "--apply-once-only={{ .Values.applyOnceOnly }}"
             {{ if .Values.useWebhook }}
             - "--use-webhook=true"
             - "--webhook-port={{ .Values.webhookService.port }}"

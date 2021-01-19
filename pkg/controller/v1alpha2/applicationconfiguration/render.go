@@ -20,20 +20,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
 
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
@@ -45,17 +50,16 @@ const (
 
 // Render error format strings.
 const (
-	errFmtGetComponent           = "cannot get component %q"
-	errFmtGetScope               = "cannot get scope %q"
-	errFmtGetComponentRevision   = "cannot get component revision %q"
-	errFmtResolveParams          = "cannot resolve parameter values for component %q"
-	errFmtRenderWorkload         = "cannot render workload for component %q"
-	errFmtRenderTrait            = "cannot render trait for component %q"
-	errFmtSetParam               = "cannot set parameter %q"
-	errFmtUnsupportedParam       = "unsupported parameter %q"
-	errFmtRequiredParam          = "required parameter %q not specified"
-	errFmtControllerRevisionData = "cannot get valid component data from controllerRevision %q"
-	errSetValueForField          = "can not set value %q for fieldPath %q"
+	errFmtGetComponent     = "cannot get component %q"
+	errFmtGetScope         = "cannot get scope %q"
+	errFmtResolveParams    = "cannot resolve parameter values for component %q"
+	errFmtRenderWorkload   = "cannot render workload for component %q"
+	errFmtRenderTrait      = "cannot render trait for component %q"
+	errFmtSetParam         = "cannot set parameter %q"
+	errFmtUnsupportedParam = "unsupported parameter %q"
+	errFmtRequiredParam    = "required parameter %q not specified"
+	errFmtCompRevision     = "cannot get latest revision for component %q while revision is enabled"
+	errSetValueForField    = "can not set value %q for fieldPath %q"
 )
 
 var (
@@ -63,7 +67,9 @@ var (
 	ErrDataOutputNotExist = errors.New("DataOutput does not exist")
 )
 
-const instanceNamePath = "metadata.name"
+const (
+	instanceNamePath = "metadata.name"
+)
 
 // A ComponentRenderer renders an ApplicationConfiguration's Components into
 // workloads and traits.
@@ -80,12 +86,14 @@ func (fn ComponentRenderFn) Render(ctx context.Context, ac *v1alpha2.Application
 	return fn(ctx, ac)
 }
 
+var _ ComponentRenderer = &components{}
+
 type components struct {
-	client     client.Reader
-	appsClient clientappv1.AppsV1Interface
-	params     ParameterResolver
-	workload   ResourceRenderer
-	trait      ResourceRenderer
+	client   client.Reader
+	dm       discoverymapper.DiscoveryMapper
+	params   ParameterResolver
+	workload ResourceRenderer
+	trait    ResourceRenderer
 }
 
 func (r *components) Render(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
@@ -104,7 +112,7 @@ func (r *components) Render(ctx context.Context, ac *v1alpha2.ApplicationConfigu
 	ds := &v1alpha2.DependencyStatus{}
 	res := make([]Workload, 0, len(ac.Spec.Components))
 	for i, acc := range ac.Spec.Components {
-		unsatisfied, err := r.handleDependency(ctx, workloads[i], acc, dag)
+		unsatisfied, err := r.handleDependency(ctx, workloads[i], acc, dag, ac)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -119,7 +127,7 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 	if acc.RevisionName != "" {
 		acc.ComponentName = ExtractComponentName(acc.RevisionName)
 	}
-	c, componentRevisionName, err := r.getComponent(ctx, acc, ac.GetNamespace())
+	c, componentRevisionName, err := util.GetComponent(ctx, r.client, acc, ac.GetNamespace())
 	if err != nil {
 		return nil, err
 	}
@@ -128,13 +136,26 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		return nil, errors.Wrapf(err, errFmtResolveParams, acc.ComponentName)
 	}
 
+	// 每次都是重新生成workload
 	w, err := r.workload.Render(c.Spec.Workload.Raw, p...)
 	if err != nil {
 		return nil, errors.Wrapf(err, errFmtRenderWorkload, acc.ComponentName)
 	}
+	compInfoLabels := map[string]string{
+		oam.LabelAppName:              ac.Name,
+		oam.LabelAppComponent:         acc.ComponentName,
+		oam.LabelAppComponentRevision: componentRevisionName,
+		oam.LabelOAMResourceType:      oam.ResourceTypeWorkload,
+	}
+	util.AddLabels(w, compInfoLabels)
+
+	compInfoAnnotations := map[string]string{
+		oam.AnnotationAppGeneration: strconv.Itoa(int(ac.Generation)),
+	}
+	util.AddAnnotations(w, compInfoAnnotations)
 
 	// pass through labels and annotation from app-config to workload
-	r.passThroughObjMeta(ac.ObjectMeta, w)
+	util.PassLabelAndAnnotation(ac, w)
 
 	ref := metav1.NewControllerRef(ac, v1alpha2.ApplicationConfigurationGroupVersionKind)
 	w.SetOwnerReferences([]metav1.OwnerReference{*ref})
@@ -143,57 +164,58 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 	traits := make([]*Trait, 0, len(acc.Traits))
 	traitDefs := make([]v1alpha2.TraitDefinition, 0, len(acc.Traits))
 	volumeTraitExit := false
+	compInfoLabels[oam.LabelOAMResourceType] = oam.ResourceTypeTrait
+
 	for _, ct := range acc.Traits {
 		t, traitDef, err := r.renderTrait(ctx, ct, ac, acc.ComponentName, ref, dag)
 		if err != nil {
 			return nil, err
 		}
-
+		util.AddLabels(t, compInfoLabels)
+		util.AddAnnotations(t, compInfoAnnotations)
 		// pass through labels and annotation from app-config to trait
-		r.passThroughObjMeta(ac.ObjectMeta, t)
-		traits = append(traits, &Trait{Object: *t})
+		util.PassLabelAndAnnotation(ac, t)
+		traits = append(traits, &Trait{Object: *t, Definition: *traitDef})
 		traitDefs = append(traitDefs, *traitDef)
-
 		if t.GetKind() == util.KindVolumeTrait {
 			volumeTraitExit = true
-
-			if t.GetLabels() != nil {
-				continue
-			}
-			if ac.Generation == 1 {
-				t.SetLabels(map[string]string{
-					util.LabelKeyChildResource:     util.KindStatefulSet,
-					util.LabelKeyChildResourceName: w.GetName(),
-				})
-			} else {
-				t.SetLabels(map[string]string{
-					util.LabelKeyChildResource:     util.KindDeployment,
-					util.LabelKeyChildResourceName: w.GetName(),
-				})
-			}
-
-		}
-
-	}
-
-	if ac.Generation == 1 {
-		if volumeTraitExit {
-			w.SetLabels(map[string]string{
-				util.LabelKeyChildResource: util.KindStatefulSet,
-				util.LabelAppId: ac.Name,
-			})
-		} else {
-			w.SetLabels(map[string]string{
-				util.LabelKeyChildResource: util.KindDeployment,
-				util.LabelAppId: ac.Name,
-			})
 		}
 	}
 
-	if err := SetWorkloadInstanceName(traitDefs, w, c); err != nil {
+	util.AddLabels(w,map[string]string{util.LabelAppId:ac.Name})
+
+	existingWorkload, err := r.getExistingWorkload(ctx, ac, c, w)
+	if err != nil {
 		return nil, err
 	}
+	if existingWorkload.Object == nil{
+		if volumeTraitExit {
+			util.AddLabels(w,map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
+		} else {
+			util.AddLabels(w,map[string]string{util.LabelKeyChildResource: util.KindDeployment})}
+	}
 
+
+	if err := SetWorkloadInstanceName(traitDefs, w, c, existingWorkload); err != nil {
+		return nil, err
+	}
+	// create the ref after the workload name is set
+	workloadRef := runtimev1alpha1.TypedReference{
+		APIVersion: w.GetAPIVersion(),
+		Kind:       w.GetKind(),
+		Name:       w.GetName(),
+	}
+	//  We only patch a TypedReference object to the trait if it asks for it
+	for i := range acc.Traits {
+		traitDef := traitDefs[i]
+		trait := traits[i]
+		workloadRefPath := traitDef.Spec.WorkloadRefPath
+		if len(workloadRefPath) != 0 {
+			if err := fieldpath.Pave(trait.Object.UnstructuredContent()).SetValue(workloadRefPath, workloadRef); err != nil {
+				return nil, errors.Wrapf(err, errFmtSetWorkloadRef, trait.Object.GetName(), w.GetName())
+			}
+		}
+	}
 	scopes := make([]unstructured.Unstructured, 0, len(acc.Scopes))
 	for _, cs := range acc.Scopes {
 		scopeObject, err := r.renderScope(ctx, cs, ac.GetNamespace())
@@ -206,7 +228,8 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 
 	addDataOutputsToDAG(dag, acc.DataOutputs, w)
 
-	return &Workload{ComponentName: acc.ComponentName, ComponentRevisionName: componentRevisionName, Workload: w, Traits: traits, Scopes: scopes}, nil
+	return &Workload{ComponentName: acc.ComponentName, ComponentRevisionName: componentRevisionName,
+		Workload: w, Traits: traits, RevisionEnabled: isRevisionEnabled(traitDefs), Scopes: scopes}, nil
 }
 
 func (r *components) renderTrait(ctx context.Context, ct v1alpha2.ComponentTrait, ac *v1alpha2.ApplicationConfiguration,
@@ -215,15 +238,16 @@ func (r *components) renderTrait(ctx context.Context, ct v1alpha2.ComponentTrait
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, errFmtRenderTrait, componentName)
 	}
-
-	traitName := getTraitName(ac, componentName, &ct, t)
-
-	setTraitProperties(t, traitName, ac.GetNamespace(), ref)
-
-	traitDef, err := util.FetchTraitDefinition(ctx, r.client, t)
+	traitDef, err := util.FetchTraitDefinition(ctx, r.client, r.dm, t)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return t, util.GetDummyTraitDefinition(t), nil
+		}
 		return nil, nil, errors.Wrapf(err, errFmtGetTraitDefinition, t.GetAPIVersion(), t.GetKind(), t.GetName())
 	}
+	traitName := getTraitName(ac, componentName, &ct, t, traitDef)
+
+	setTraitProperties(t, traitName, ac.GetNamespace(), ref)
 
 	addDataOutputsToDAG(dag, ct.DataOutputs, t)
 
@@ -253,17 +277,30 @@ func setTraitProperties(t *unstructured.Unstructured, traitName, namespace strin
 }
 
 // SetWorkloadInstanceName will set metadata.name for workload CR according to createRevision flag in traitDefinition
-func SetWorkloadInstanceName(traitDefs []v1alpha2.TraitDefinition, w *unstructured.Unstructured, c *v1alpha2.Component) error {
-	//Don't override the specified name
+func SetWorkloadInstanceName(traitDefs []v1alpha2.TraitDefinition, w *unstructured.Unstructured, c *v1alpha2.Component,
+	existingWorkload *unstructured.Unstructured) error {
+	// Don't override the specified name
 	if w.GetName() != "" {
 		return nil
 	}
 	pv := fieldpath.Pave(w.UnstructuredContent())
 	if isRevisionEnabled(traitDefs) {
-		// if revisionEnabled, use revisionName as the workload name
-		if err := pv.SetString(instanceNamePath, c.Status.LatestRevision.Name); err != nil {
+		if c.Status.LatestRevision == nil {
+			return fmt.Errorf(errFmtCompRevision, c.Name)
+		}
+
+		componentLastRevision := c.Status.LatestRevision.Name
+		// if workload exists, check the revision label, we will not change the name if workload exists and no revision changed
+		if existingWorkload != nil && existingWorkload.GetLabels()[oam.LabelAppComponentRevision] == componentLastRevision {
+			return nil
+		}
+
+		// if revisionEnabled and the running workload's revision isn't equal to the component's latest reversion,
+		// use revisionName as the workload name
+		if err := pv.SetString(instanceNamePath, componentLastRevision); err != nil {
 			return errors.Wrapf(err, errSetValueForField, instanceNamePath, c.Status.LatestRevision)
 		}
+
 		return nil
 	}
 	// use component name as workload name, which means we will always use one workload for different revisions
@@ -282,54 +319,6 @@ func isRevisionEnabled(traitDefs []v1alpha2.TraitDefinition) bool {
 		}
 	}
 	return false
-}
-
-func (r *components) getComponent(ctx context.Context, acc v1alpha2.ApplicationConfigurationComponent, namespace string) (*v1alpha2.Component, string, error) {
-	c := &v1alpha2.Component{}
-	var revisionName string
-	if acc.RevisionName != "" {
-		revision, err := r.appsClient.ControllerRevisions(namespace).Get(ctx, acc.RevisionName, metav1.GetOptions{})
-		if err != nil {
-			return nil, "", errors.Wrapf(err, errFmtGetComponentRevision, acc.RevisionName)
-		}
-		c, err := UnpackRevisionData(revision)
-		if err != nil {
-			return nil, "", errors.Wrapf(err, errFmtControllerRevisionData, acc.RevisionName)
-		}
-		revisionName = acc.RevisionName
-		return c, revisionName, nil
-	}
-	nn := types.NamespacedName{Namespace: namespace, Name: acc.ComponentName}
-	if err := r.client.Get(ctx, nn, c); err != nil {
-		return nil, "", errors.Wrapf(err, errFmtGetComponent, acc.ComponentName)
-	}
-	if c.Status.LatestRevision != nil {
-		revisionName = c.Status.LatestRevision.Name
-	}
-	return c, revisionName, nil
-}
-
-// pass through labels and annotation from app-config to workload  or trait
-func (r *components) passThroughObjMeta(oMeta metav1.ObjectMeta, u *unstructured.Unstructured) {
-	mergeMap := func(src, dst map[string]string) map[string]string {
-		if len(src) == 0 {
-			return dst
-		}
-		// make sure dst is initialized
-		if dst == nil {
-			dst = map[string]string{}
-		}
-		for k, v := range src {
-			if _, exist := dst[k]; !exist {
-				dst[k] = v
-			}
-		}
-		return dst
-	}
-	// pass app-config labels
-	u.SetLabels(mergeMap(oMeta.GetLabels(), u.GetLabels()))
-	// pass app-config annotation
-	u.SetAnnotations(mergeMap(oMeta.GetAnnotations(), u.GetAnnotations()))
 }
 
 // A ResourceRenderer renders a Kubernetes-compliant YAML resource into an
@@ -458,10 +447,13 @@ func addDataOutputsToDAG(dag *dag, outs []v1alpha2.DataOutput, obj *unstructured
 	}
 }
 
-func (r *components) handleDependency(ctx context.Context, w *Workload, acc v1alpha2.ApplicationConfigurationComponent, dag *dag) ([]v1alpha2.UnstaifiedDependency, error) {
+func (r *components) handleDependency(ctx context.Context, w *Workload, acc v1alpha2.ApplicationConfigurationComponent, dag *dag, ac *v1alpha2.ApplicationConfiguration) ([]v1alpha2.UnstaifiedDependency, error) {
 	uds := make([]v1alpha2.UnstaifiedDependency, 0)
-
-	unsatisfied, err := r.handleDataInput(ctx, acc.DataInputs, dag, w.Workload)
+	unstructuredAC, err := util.Object2Unstructured(ac)
+	if err != nil {
+		return nil, errors.Wrapf(err, "handleDataInput by convert AppConfig (%s) to unstructured object failed", ac.Name)
+	}
+	unsatisfied, err := r.handleDataInput(ctx, acc.DataInputs, dag, w.Workload, unstructuredAC)
 	if err != nil {
 		return nil, errors.Wrapf(err, "handleDataInput for workload (%s/%s) failed", w.Workload.GetNamespace(), w.Workload.GetName())
 	}
@@ -472,7 +464,7 @@ func (r *components) handleDependency(ctx context.Context, w *Workload, acc v1al
 
 	for i, ct := range acc.Traits {
 		trait := w.Traits[i]
-		unsatisfied, err := r.handleDataInput(ctx, ct.DataInputs, dag, &trait.Object)
+		unsatisfied, err := r.handleDataInput(ctx, ct.DataInputs, dag, &trait.Object, unstructuredAC)
 		if err != nil {
 			return nil, errors.Wrapf(err, "handleDataInput for trait (%s/%s) failed", trait.Object.GetNamespace(), trait.Object.GetName())
 		}
@@ -484,8 +476,9 @@ func (r *components) handleDependency(ctx context.Context, w *Workload, acc v1al
 	return uds, nil
 }
 
-func makeUnsatisfiedDependency(obj *unstructured.Unstructured, s *dagSource, in v1alpha2.DataInput) v1alpha2.UnstaifiedDependency {
+func makeUnsatisfiedDependency(obj *unstructured.Unstructured, s *dagSource, in v1alpha2.DataInput, reason string) v1alpha2.UnstaifiedDependency {
 	return v1alpha2.UnstaifiedDependency{
+		Reason: reason,
 		From: v1alpha2.DependencyFromObject{
 			TypedReference: runtimev1alpha1.TypedReference{
 				APIVersion: s.ObjectRef.APIVersion,
@@ -505,19 +498,19 @@ func makeUnsatisfiedDependency(obj *unstructured.Unstructured, s *dagSource, in 
 	}
 }
 
-func (r *components) handleDataInput(ctx context.Context, ins []v1alpha2.DataInput, dag *dag, obj *unstructured.Unstructured) ([]v1alpha2.UnstaifiedDependency, error) {
+func (r *components) handleDataInput(ctx context.Context, ins []v1alpha2.DataInput, dag *dag, obj, ac *unstructured.Unstructured) ([]v1alpha2.UnstaifiedDependency, error) {
 	uds := make([]v1alpha2.UnstaifiedDependency, 0)
 	for _, in := range ins {
 		s, ok := dag.Sources[in.ValueFrom.DataOutputName]
 		if !ok {
 			return nil, errors.Wrapf(ErrDataOutputNotExist, "DataOutputName (%s)", in.ValueFrom.DataOutputName)
 		}
-		val, ready, err := r.checkSourceReady(ctx, s)
+		val, ready, reason, err := r.getDataInput(ctx, s, ac)
 		if err != nil {
-			return nil, errors.Wrap(err, "checkSourceReady failed")
+			return nil, errors.Wrap(err, "getDataInput failed")
 		}
 		if !ready {
-			uds = append(uds, makeUnsatisfiedDependency(obj, s, in))
+			uds = append(uds, makeUnsatisfiedDependency(obj, s, in, reason))
 			return uds, nil
 		}
 
@@ -529,18 +522,35 @@ func (r *components) handleDataInput(ctx context.Context, ins []v1alpha2.DataInp
 	return uds, nil
 }
 
-func fillValue(obj *unstructured.Unstructured, fs []string, val string) error {
+func fillValue(obj *unstructured.Unstructured, fs []string, val interface{}) error {
 	paved := fieldpath.Pave(obj.Object)
 	for _, fp := range fs {
-		err := paved.SetString(fp, val)
+		toSet := val
+
+		// Special case for slcie because we will append instead of rewriting.
+		if reflect.TypeOf(val).Kind() == reflect.Slice {
+			raw, err := paved.GetValue(fp)
+			if err != nil {
+				if fieldpath.IsNotFound(err) {
+					raw = make([]interface{}, 0)
+				} else {
+					return err
+				}
+			}
+			l := raw.([]interface{})
+			l = append(l, val.([]interface{})...)
+			toSet = l
+		}
+
+		err := paved.SetValue(fp, toSet)
 		if err != nil {
-			return fmt.Errorf("paved.SetString() failed: %w", err)
+			return errors.Wrap(err, "paved.SetValue() failed")
 		}
 	}
 	return nil
 }
 
-func (r *components) checkSourceReady(ctx context.Context, s *dagSource) (string, bool, error) {
+func (r *components) getDataInput(ctx context.Context, s *dagSource, ac *unstructured.Unstructured) (interface{}, bool, string, error) {
 	obj := s.ObjectRef
 	key := types.NamespacedName{
 		Namespace: obj.Namespace,
@@ -550,69 +560,111 @@ func (r *components) checkSourceReady(ctx context.Context, s *dagSource) (string
 	u.SetGroupVersionKind(obj.GroupVersionKind())
 	err := r.client.Get(ctx, key, u)
 	if err != nil {
-		return "", false, errors.Wrap(resource.IgnoreNotFound(err), fmt.Sprintf("failed to get object (%s)", key.String()))
+		reason := fmt.Sprintf("failed to get object (%s)", key.String())
+		return nil, false, reason, errors.Wrap(resource.IgnoreNotFound(err), reason)
 	}
 	paved := fieldpath.Pave(u.UnstructuredContent())
+	pavedAC := fieldpath.Pave(ac.UnstructuredContent())
 
-	// TODO: Currently only string value supported. Support more types in the future.
-	val, err := paved.GetString(obj.FieldPath)
+	rawval, err := paved.GetValue(obj.FieldPath)
 	if err != nil {
 		if fieldpath.IsNotFound(err) {
-			return "", false, nil
+			return "", false, fmt.Sprintf("%s not found in object", obj.FieldPath), nil
 		}
-		return "", false, fmt.Errorf("failed to get field value (%s) in object (%s): %w", obj.FieldPath, key.String(), err)
+		err = fmt.Errorf("failed to get field value (%s) in object (%s): %w", obj.FieldPath, key.String(), err)
+		return nil, false, err.Error(), err
 	}
 
-	ok, err := matchValue(s.Conditions, val, paved)
-	if err != nil {
-		return val, false, err
+	var ok bool
+	var reason string
+	switch val := rawval.(type) {
+	case string:
+		// For string input we will:
+		// - check its value not empty if no condition is given.
+		// - check its value against conditions if no field path is specified.
+		ok, reason = matchValue(s.Conditions, val, paved, pavedAC)
+	default:
+		ok, reason = checkConditions(s.Conditions, paved, nil, pavedAC)
 	}
 	if !ok {
-		return val, false, nil
+		return nil, false, reason, nil
 	}
 
-	return val, true, nil
+	return rawval, true, "", nil
 }
 
-func matchValue(conds []v1alpha2.ConditionRequirement, val string, paved *fieldpath.Paved) (bool, error) {
-	// If no matcher is specified, it is by default to check value not empty.
+func matchValue(conds []v1alpha2.ConditionRequirement, val string, paved, ac *fieldpath.Paved) (bool, string) {
+	// If no condition is specified, it is by default to check value not empty.
 	if len(conds) == 0 {
-		return val != "", nil
+		if val == "" {
+			return false, "value should not be empty"
+		}
+		return true, ""
 	}
 
+	return checkConditions(conds, paved, &val, ac)
+}
+
+func getCheckVal(m v1alpha2.ConditionRequirement, paved *fieldpath.Paved, val *string) (string, error) {
+	var checkVal string
+	switch {
+	case m.FieldPath != "":
+		return paved.GetString(m.FieldPath)
+	case val != nil:
+		checkVal = *val
+	default:
+		return "", errors.New("FieldPath not specified")
+	}
+	return checkVal, nil
+}
+
+func getExpectVal(m v1alpha2.ConditionRequirement, ac *fieldpath.Paved) (string, error) {
+	if m.Value != "" {
+		return m.Value, nil
+	}
+	if m.ValueFrom.FieldPath == "" || ac == nil {
+		return "", nil
+	}
+	var err error
+	value, err := ac.GetString(m.ValueFrom.FieldPath)
+	if err != nil {
+		return "", fmt.Errorf("get valueFrom.fieldPath fail: %v", err)
+	}
+	return value, nil
+}
+
+func checkConditions(conds []v1alpha2.ConditionRequirement, paved *fieldpath.Paved, val *string, ac *fieldpath.Paved) (bool, string) {
 	for _, m := range conds {
-		var checkVal string
-		if m.FieldPath != "" {
-			var err error
-			checkVal, err = paved.GetString(m.FieldPath)
-			if err != nil {
-				return false, err
-			}
-		} else {
-			checkVal = val
+		checkVal, err := getCheckVal(m, paved, val)
+		if err != nil {
+			return false, fmt.Sprintf("can't get value to check %v", err)
+		}
+		m.Value, err = getExpectVal(m, ac)
+		if err != nil {
+			return false, err.Error()
 		}
 
 		switch m.Operator {
 		case v1alpha2.ConditionEqual:
 			if m.Value != checkVal {
-				return false, nil
+				return false, fmt.Sprintf("got(%v) expected to be %v", checkVal, m.Value)
 			}
 		case v1alpha2.ConditionNotEqual:
 			if m.Value == checkVal {
-				return false, nil
+				return false, fmt.Sprintf("got(%v) expected not to be %v", checkVal, m.Value)
 			}
 		case v1alpha2.ConditionNotEmpty:
 			if checkVal == "" {
-				return false, nil
+				return false, "value should not be empty"
 			}
 		}
 	}
-	return true, nil
+	return true, ""
 }
 
 // GetTraitName return trait name
 func getTraitName(ac *v1alpha2.ApplicationConfiguration, componentName string,
-	ct *v1alpha2.ComponentTrait, t *unstructured.Unstructured) string {
+	ct *v1alpha2.ComponentTrait, t *unstructured.Unstructured, traitDef *v1alpha2.TraitDefinition) string {
 	var (
 		traitName  string
 		apiVersion string
@@ -626,6 +678,11 @@ func getTraitName(ac *v1alpha2.ApplicationConfiguration, componentName string,
 	apiVersion = t.GetAPIVersion()
 	kind = t.GetKind()
 
+	traitType := traitDef.Name
+	if strings.Contains(traitType, ".") {
+		traitType = strings.Split(traitType, ".")[0]
+	}
+
 	for _, w := range ac.Status.Workloads {
 		if w.ComponentName != componentName {
 			continue
@@ -638,8 +695,30 @@ func getTraitName(ac *v1alpha2.ApplicationConfiguration, componentName string,
 	}
 
 	if len(traitName) == 0 {
-		traitName = util.GenTraitName(componentName, ct.DeepCopy())
+		traitName = util.GenTraitName(componentName, ct.DeepCopy(), traitType)
 	}
 
 	return traitName
+}
+
+// getExistingWorkload tries to retrieve the currently running workload
+func (r *components) getExistingWorkload(ctx context.Context, ac *v1alpha2.ApplicationConfiguration, c *v1alpha2.Component, w *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	var workloadName string
+	existingWorkload := &unstructured.Unstructured{}
+	for _, component := range ac.Status.Workloads {
+		if component.ComponentName != c.GetName() {
+			continue
+		}
+		workloadName = component.Reference.Name
+	}
+	if workloadName != "" {
+		objectKey := client.ObjectKey{Namespace: ac.GetNamespace(), Name: workloadName}
+		existingWorkload.SetAPIVersion(w.GetAPIVersion())
+		existingWorkload.SetKind(w.GetKind())
+		err := r.client.Get(ctx, objectKey, existingWorkload)
+		if err != nil {
+			return nil, client.IgnoreNotFound(err)
+		}
+	}
+	return existingWorkload, nil
 }

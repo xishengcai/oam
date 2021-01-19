@@ -1,0 +1,26 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: compent-canary-v1
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    metadata:
+      name: compent-canary-v1
+    spec:
+      serviceMesh: true
+      containers:
+        - name: canary
+          image: xishengcai/canary
+          ports:
+            - containerPort: 80
+              name: canary
+          env:
+            - name: VERSION
+              value: v1
+          resources:
+            cpu:
+              required: "50m"
+            memory:
+              required: "60Mi"

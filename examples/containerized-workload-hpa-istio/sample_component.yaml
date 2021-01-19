@@ -1,0 +1,23 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: compent-hpa
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    metadata:
+      name: compent-hpa
+    spec:
+      serviceMesh: true
+      containers:
+        - name: canary
+          image: xishengcai/canary
+          ports:
+            - containerPort: 80
+              name: canary
+          resources:
+            cpu:
+              required: "100m"
+            memory:
+              required: "500Mi"

@@ -101,6 +101,13 @@ var (
 	HealthScopeGroupVersionKind = SchemeGroupVersion.WithKind(HealthScopeKind)
 )
 
+var (
+	HorizontalPodAutoscalerTraitKind             = reflect.TypeOf(HorizontalPodAutoscalerTrait{}).Name()
+	HorizontalPodAutoscalerTraitGroupKind        = schema.GroupKind{Group: Group, Kind: HorizontalPodAutoscalerTraitKind}.String()
+	HorizontalPodAutoscalerTraitKindAPIVersion   = HorizontalPodAutoscalerTraitKind + "." + SchemeGroupVersion.String()
+	HorizontalPodAutoscalerTraitGroupVersionKind = SchemeGroupVersion.WithKind(HorizontalPodAutoscalerTraitKind)
+)
+
 // VolumeTrait type metadata.
 var (
 	VolumeTraitKind             = reflect.TypeOf(VolumeTrait{}).Name()
@@ -109,11 +116,12 @@ var (
 	VolumeTraitGroupVersionKind = SchemeGroupVersion.WithKind(VolumeTraitKind)
 )
 
+// istio gray deploy trait
 var (
-	HorizontalPodAutoscalerTraitKind             = reflect.TypeOf(HorizontalPodAutoscalerTrait{}).Name()
-	HorizontalPodAutoscalerTraitGroupKind        = schema.GroupKind{Group: Group, Kind: HorizontalPodAutoscalerTraitKind}.String()
-	HorizontalPodAutoscalerTraitKindAPIVersion   = HorizontalPodAutoscalerTraitKind + "." + SchemeGroupVersion.String()
-	HorizontalPodAutoscalerTraitGroupVersionKind = SchemeGroupVersion.WithKind(HorizontalPodAutoscalerTraitKind)
+	CanaryTraitKind             = reflect.TypeOf(CanaryTrait{}).Name()
+	CanaryTraitGroupKind        = schema.GroupKind{Group: Group, Kind: CanaryTraitKind}.String()
+	CanaryTraitKindAPIVersion   = CanaryTraitKind + "." + SchemeGroupVersion.String()
+	CanaryTraitGroupVersionKind = SchemeGroupVersion.WithKind(CanaryTraitKind)
 )
 
 func init() {
@@ -127,4 +135,5 @@ func init() {
 	SchemeBuilder.Register(&HealthScope{}, &HealthScopeList{})
 	SchemeBuilder.Register(&VolumeTrait{}, &VolumeTraitList{})
 	SchemeBuilder.Register(&HorizontalPodAutoscalerTrait{}, &HorizontalPodAutoscalerTraitList{})
+	SchemeBuilder.Register(&CanaryTrait{}, &CanaryTraitList{})
 }
