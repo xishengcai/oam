@@ -40,7 +40,7 @@ const (
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager,args controller.Args, log logging.Logger) error {
+func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func Setup(mgr ctrl.Manager,args controller.Args, log logging.Logger) error {
 		log:             ctrl.Log.WithName("VolumeTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeTrait")),
 		Scheme:          mgr.GetScheme(),
-		dm: dm,
+		dm:              dm,
 	}
 	return r.SetupWithManager(mgr, log)
 
@@ -191,6 +191,10 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 
 		var volumes []v1.Volume
 		var pvcList []v1.PersistentVolumeClaim
+
+		// volume 是列表， 因为可能有多个容器
+		containers, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec", "containers")
+
 		for _, item := range volumeTrait.Spec.VolumeList {
 			var volumeMounts []v1.VolumeMount
 			for pathIndex, path := range item.Paths {
@@ -227,8 +231,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 					},
 				})
 			}
-
-			containers, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec", "containers")
 			c, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
 			vmInterface, _ := c["volumeMounts"].([]interface{})
 
@@ -253,6 +255,32 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 			}
 		}
 		spec.(map[string]interface{})["volumes"] = volumes
+
+		// delete volumeMounts
+		for _, c := range containers.([]interface{}) {
+			c, _ := c.(map[string]interface{})
+			vmInterface, _ := c["volumeMounts"].([]interface{})
+			var volumeMounts []v1.VolumeMount
+			if len(vmInterface) != 0 {
+				var vms []v1.VolumeMount
+				b, _ := json.Marshal(vmInterface)
+				_ = json.Unmarshal(b, &vms)
+				for _, o := range vms {
+					if strings.Contains(o.Name, "oam-component-sts") {
+						for _, i := range volumes {
+							if i.Name == o.Name {
+								volumeMounts = append(volumeMounts, o)
+							}
+						}
+					} else {
+						volumeMounts = append(volumeMounts, o)
+					}
+
+				}
+				c["volumeMounts"] = volumeMounts
+			}
+
+		}
 
 		// merge patch to modify the pvc
 		var pvcUidList []types.UID

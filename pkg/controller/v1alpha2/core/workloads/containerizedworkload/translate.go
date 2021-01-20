@@ -162,6 +162,7 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 		}
 		d.Spec.Template.Spec.Containers = append(d.Spec.Template.Spec.Containers, kubernetesContainer)
 	}
+
 	return d, nil
 }
 
@@ -350,6 +351,7 @@ func setInjectLabel(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
 		d.Spec.Template.Labels[sidecarInjectionLabelKey] = "enabled"
 	} else {
 		delete(d.Spec.Template.Labels, sidecarInjectionLabelKey)
+		delete(d.Spec.Selector.MatchLabels,sidecarInjectionLabelKey)
 	}
 }
 
