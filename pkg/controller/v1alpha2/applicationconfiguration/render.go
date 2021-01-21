@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"strconv"
 	"strings"
@@ -178,7 +179,13 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		traits = append(traits, &Trait{Object: *t, Definition: *traitDef})
 		traitDefs = append(traitDefs, *traitDef)
 		if t.GetKind() == util.KindVolumeTrait {
-			volumeTraitExit = true
+	        // 如果volumeTrait 中的数组不为0， 则是statefulset 类型
+			volumeTrait := &v1alpha2.VolumeTrait{}
+			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(t.Object, volumeTrait)
+			if len(volumeTrait.Spec.VolumeList) != 0{
+				volumeTraitExit = true
+			}
+
 		}
 	}
 
