@@ -101,6 +101,7 @@ var (
 	HealthScopeGroupVersionKind = SchemeGroupVersion.WithKind(HealthScopeKind)
 )
 
+// HorizontalPodAutoscalerTraitKind type metadata
 var (
 	HorizontalPodAutoscalerTraitKind             = reflect.TypeOf(HorizontalPodAutoscalerTrait{}).Name()
 	HorizontalPodAutoscalerTraitGroupKind        = schema.GroupKind{Group: Group, Kind: HorizontalPodAutoscalerTraitKind}.String()

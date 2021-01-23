@@ -35,9 +35,8 @@ import (
 
 // Reconcile error strings.
 const (
-	errQueryOpenAPI = "failed to query openAPI"
-	errMountVolume  = "cannot scale the resource"
-	errApplyPVC     = "cannot apply the pvc"
+	errMountVolume = "cannot scale the resource"
+	errApplyPVC    = "cannot apply the pvc"
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
@@ -219,7 +218,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 						},
 						Resources: v1.ResourceRequirements{
 							Requests: v1.ResourceList{
-								v1.ResourceName(v1.ResourceStorage): resource.MustParse(path.Size),
+								v1.ResourceStorage: resource.MustParse(path.Size),
 							},
 						},
 					},
@@ -251,8 +250,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 
 		var pvcNameList []string
 		for _, pvc := range pvcList {
-			pvcTemp := &v1.PersistentVolumeClaim{}
-			pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{})
+			pvcTemp, err := r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
 				if err != nil {

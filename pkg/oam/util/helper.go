@@ -44,18 +44,21 @@ var (
 	KindVolumeTrait = reflect.TypeOf(v1alpha2.VolumeTrait{}).Name()
 	//KindPersistentVolumeClaim is the k8s PersistentVolumeClaim kind
 	KindPersistentVolumeClaim = reflect.TypeOf(corev1.PersistentVolumeClaim{}).Name()
-	// ReconcileWaitResult is the time to wait between reconciliation.
+	//ReconcileWaitResult is the time to wait between reconciliation.
 	ReconcileWaitResult = reconcile.Result{RequeueAfter: 30 * time.Second}
 
-	//KindDeployment is the k8s Deployment kind.
-	KindConfigMap= reflect.TypeOf(corev1.ConfigMap{}).Name()
+	//KindConfigMap is the k8s Deployment kind.
+	KindConfigMap = reflect.TypeOf(corev1.ConfigMap{}).Name()
 
-	LabelKeyChildResource     = "app.oam.dev/childResource"
-	LabelKeyChildResourceName = "app.oam.dev/childResourceName"
-	LabelAppId                = "oam.runtime.app.id"
-	LabelComponentId          = "oam.runtime.component.id"
+	//LabelKeyChildResource us containerized workload child resource
+	LabelKeyChildResource = "app.oam.dev/childResource"
+
+	//LabelAppID istio app must has this label key
+	LabelAppID = "oam.runtime.app.id"
+
+	//LabelComponentID launcher.app must has it
+	LabelComponentID = "oam.runtime.component.id"
 )
-
 
 const (
 	// TraitPrefixKey is prefix of trait name

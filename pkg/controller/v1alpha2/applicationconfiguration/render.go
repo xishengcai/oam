@@ -179,29 +179,29 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		traits = append(traits, &Trait{Object: *t, Definition: *traitDef})
 		traitDefs = append(traitDefs, *traitDef)
 		if t.GetKind() == util.KindVolumeTrait {
-	        // 如果volumeTrait 中的数组不为0， 则是statefulset 类型
+			// 如果volumeTrait 中的数组不为0， 则是statefulset 类型
 			volumeTrait := &v1alpha2.VolumeTrait{}
 			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(t.Object, volumeTrait)
-			if len(volumeTrait.Spec.VolumeList) != 0{
+			if len(volumeTrait.Spec.VolumeList) != 0 {
 				volumeTraitExit = true
 			}
 
 		}
 	}
 
-	util.AddLabels(w,map[string]string{util.LabelAppId:ac.Name})
+	util.AddLabels(w, map[string]string{util.LabelAppID: ac.Name})
 
 	existingWorkload, err := r.getExistingWorkload(ctx, ac, c, w)
 	if err != nil {
 		return nil, err
 	}
-	if existingWorkload.Object == nil{
+	if existingWorkload.Object == nil {
 		if volumeTraitExit {
-			util.AddLabels(w,map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
+			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
 		} else {
-			util.AddLabels(w,map[string]string{util.LabelKeyChildResource: util.KindDeployment})}
+			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindDeployment})
+		}
 	}
-
 
 	if err := SetWorkloadInstanceName(traitDefs, w, c, existingWorkload); err != nil {
 		return nil, err

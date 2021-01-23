@@ -2,7 +2,6 @@ package volumetrait
 
 import (
 	"context"
-	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
@@ -24,29 +23,11 @@ type VolumeHandler struct {
 	dm         discoverymapper.DiscoveryMapper
 }
 
-func (c *VolumeHandler) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	return
-}
+// Create  implements EventHandler
+func (c *VolumeHandler) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {}
 
-func (c *VolumeHandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	//newV := evt.ObjectNew.(*v1alpha2.VolumeTrait)
-	//oldV := evt.ObjectOld.(*v1alpha2.VolumeTrait)
-	//
-	//newPvcList := newV.Status.Resources
-	//oldPvcList := oldV.Status.Resources
-	//
-	//for _, o := range oldPvcList{
-	//	if ok := findElem(newPvcList,o);!ok{
-	//		err := c.ClientSet.CoreV1().PersistentVolumeClaims(newV.Namespace).
-	//			Delete(context.Background(), o.Name, metav1.DeleteOptions{})
-	//		if err != nil {
-	//			klog.Errorf("delete pvc: %s, err %v", o.Name, err)
-	//		}
-	//		c.Logger.Info("remove old pvc", "pvcName", o.Name)
-	//	}
-	//}
-	return
-}
+// Update  implements EventHandler
+func (c *VolumeHandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {}
 
 // Delete implements EventHandler
 func (c *VolumeHandler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
@@ -63,12 +44,10 @@ func (c *VolumeHandler) Generic(_ event.GenericEvent, _ workqueue.RateLimitingIn
 }
 
 func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
-
 	volumeTrait, ok := object.(*v1alpha2.VolumeTrait)
 	if !ok {
 		return nil
 	}
-
 	ctx := context.Background()
 	// Fetch the workload instance this trait is referring to
 	workload, err := util.FetchWorkload(ctx, c.Client, c.Logger, volumeTrait)
@@ -108,13 +87,4 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 
 	}
 	return nil
-}
-
-func findElem(array []v1alpha1.TypedReference, elem v1alpha1.TypedReference) bool {
-	for _, a := range array {
-		if a.UID == elem.UID {
-			return true
-		}
-	}
-	return false
 }

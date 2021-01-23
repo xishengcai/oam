@@ -12,7 +12,7 @@ func (r *Reconcile) cleanupResources(ctx context.Context,
 
 	log := r.log.WithValues("gc volumeTrait pvc resources", volumeTrait.Name)
 	for _, res := range volumeTrait.Status.Resources {
-		if findStringElem(pvcName, res.Name){
+		if findStringElem(pvcName, res.Name) {
 			continue
 		}
 
@@ -26,10 +26,9 @@ func (r *Reconcile) cleanupResources(ctx context.Context,
 	return nil
 }
 
-
-func findStringElem(array []string,elem string) bool{
-	for _, a := range array{
-		if a == elem{
+func findStringElem(array []string, elem string) bool {
+	for _, a := range array {
+		if a == elem {
 			return true
 		}
 	}
