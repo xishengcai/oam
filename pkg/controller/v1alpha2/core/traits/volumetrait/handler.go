@@ -2,10 +2,11 @@ package volumetrait
 
 import (
 	"context"
-	"fmt"
 	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/go-logr/logr"
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
+	"github.com/xishengcai/oam/pkg/oam/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
@@ -19,7 +20,8 @@ type VolumeHandler struct {
 	ClientSet  *kubernetes.Clientset
 	Client     client.Client
 	AppsClient clientappv1.AppsV1Interface
-	Logger     logging.Logger
+	Logger     logr.Logger
+	dm         discoverymapper.DiscoveryMapper
 }
 
 func (c *VolumeHandler) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
@@ -67,22 +69,50 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 		return nil
 	}
 
+	ctx := context.Background()
+	// Fetch the workload instance this trait is referring to
+	workload, err := util.FetchWorkload(ctx, c.Client, c.Logger, volumeTrait)
+	if err != nil {
+		return err
+	}
+
+	// Fetch the child resources list from the corresponding workload
+	resources, err := util.FetchWorkloadChildResources(ctx, c.Logger, c.Client, c.dm, workload)
+	if err != nil {
+		return err
+	}
+
+	for _, resource := range resources {
+		if resource.GetKind() == util.KindStatefulSet || resource.GetKind() == util.KindDeployment {
+			err := c.Client.Delete(ctx, resource)
+			if err != nil {
+				return err
+			}
+			c.Logger.Info("volumeTrait deleted, and delete mountResource",
+				"kind", resource.GetKind(),
+				"name", resource.GetName(),
+				"namespace", resource.GetNamespace())
+
+		}
+	}
 	// delete pvc that create by volumeTrait
 	for _, resource := range volumeTrait.Status.Resources {
 		err := c.ClientSet.CoreV1().PersistentVolumeClaims(volumeTrait.Namespace).
-			Delete(context.Background(), resource.Name, metav1.DeleteOptions{})
+			Delete(ctx, resource.Name, metav1.DeleteOptions{})
 		if err != nil {
-			return fmt.Errorf("pvc namespace: %s, name: %s delete fialed, %v",
-				volumeTrait.Namespace, resource.Name, err)
+			return err
 		}
-		c.Logger.Info("remove pvc success", "volumeTrait", object.GetName(), "pvcName", resource.Name)
+		c.Logger.Info("remove pvc success",
+			"volumeTrait", object.GetName(),
+			"pvcName", resource.Name)
+
 	}
 	return nil
 }
 
-func findElem(array []v1alpha1.TypedReference,elem v1alpha1.TypedReference) bool{
-	for _, a := range array{
-		if a.UID == elem.UID{
+func findElem(array []v1alpha1.TypedReference, elem v1alpha1.TypedReference) bool {
+	for _, a := range array {
+		if a.UID == elem.UID {
 			return true
 		}
 	}

@@ -94,7 +94,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// find the resource object to record the event to, default is the parent appConfig.
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &workload)
 	if eventObj == nil {
-		log.Error(err, "workload", workload.Name)
+		log.Error(err, "LocateParentAppConfig failed", "workloadName",workload.Name)
 		eventObj = &workload
 	}
 

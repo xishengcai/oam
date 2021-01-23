@@ -83,7 +83,8 @@ func (r *Reconcile) SetupWithManager(mgr ctrl.Manager, log logging.Logger) error
 		Watches(&source.Kind{Type: &oamv1alpha2.VolumeTrait{}}, &VolumeHandler{
 			ClientSet:  r.clientSet,
 			Client:     mgr.GetClient(),
-			Logger:     log,
+			Logger:     r.log.WithValues("volume trait delete", "..."),
+			dm:         r.dm,
 			AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
 		}).
 		Complete(r)
@@ -180,8 +181,8 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		spec, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec")
 		oldVolumes := getVolumesFromSpec(spec)
 
-		var volumes []v1.Volume  // 重新构建 volumes
-		var pvcList []*v1.PersistentVolumeClaim  // 重新构建pvc
+		var volumes []v1.Volume                 // 重新构建 volumes
+		var pvcList []*v1.PersistentVolumeClaim // 重新构建pvc
 
 		// volume 是列表， 因为可能有多个容器
 		// 从 sts or deploy中找出容器
@@ -224,14 +225,14 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 					},
 				})
 			}
-			if item.ContainerIndex > len(containers.([]interface{}))-1{
+			if item.ContainerIndex > len(containers.([]interface{}))-1 {
 				return ctrl.Result{}, fmt.Errorf("container Index out of range")
 			}
 			c, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
 			oldVolumeMounts := getVolumeMountsFromContainer(c)
 
 			// 找出非pvc的volumeMounts
-			volumeMounts = append(volumeMounts,getHasPvcVolumeMounts(oldVolumes,oldVolumeMounts)...)
+			volumeMounts = append(volumeMounts, getHasPvcVolumeMounts(oldVolumes, oldVolumeMounts)...)
 
 			c["volumeMounts"] = volumeMounts
 
@@ -241,21 +242,20 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		spec.(map[string]interface{})["volumes"] = volumes
 
 		// 多容器时， 对每个容器遍历，删除之前有pvc，但是现在没有的
-		for _, ci := range containers.([]interface{}){
+		for _, ci := range containers.([]interface{}) {
 			c := ci.(map[string]interface{})
 			vms := getVolumeMountsFromContainer(c)
-			newVms := filterVolumeMounts(volumes,vms)
+			newVms := filterVolumeMounts(volumes, vms)
 			c["volumeMounts"] = newVms
 		}
 
-
 		var pvcNameList []string
 		for _, pvc := range pvcList {
-			pvcTemp := & v1.PersistentVolumeClaim{}
+			pvcTemp := &v1.PersistentVolumeClaim{}
 			pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
-				if err != nil{
+				if err != nil {
 					mLog.Info("create pvc failed", "pvcName", pvc.Name)
 					continue
 				}
@@ -298,7 +298,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 	return ctrl.Result{}, nil
 }
 
-
 func getVolumeMountsFromContainer(container map[string]interface{}) (vms []v1.VolumeMount) {
 	vmInterface, ok := container["volumeMounts"]
 	if !ok {
@@ -311,7 +310,6 @@ func getVolumeMountsFromContainer(container map[string]interface{}) (vms []v1.Vo
 	_ = json.Unmarshal(b, &vms)
 	return
 }
-
 
 func getVolumesFromSpec(spec interface{}) (vls []v1.Volume) {
 	vlsInterface, ok := spec.(map[string]interface{})["volumes"].([]interface{})
@@ -326,12 +324,12 @@ func getVolumesFromSpec(spec interface{}) (vls []v1.Volume) {
 	return
 }
 
-func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMounts []v1.VolumeMount){
+func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMounts []v1.VolumeMount) {
 	for _, x := range vls {
-		if x.PersistentVolumeClaim != nil{
+		if x.PersistentVolumeClaim != nil {
 			continue
 		}
-		for _, j := range vms{
+		for _, j := range vms {
 			if j.Name == x.Name {
 				noPvcVolumeMounts = append(noPvcVolumeMounts, j)
 			}
@@ -340,9 +338,9 @@ func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMo
 	return
 }
 
-func mergeVolumes(old []v1.Volume, new []v1.Volume) []v1.Volume{
+func mergeVolumes(old []v1.Volume, new []v1.Volume) []v1.Volume {
 	for _, x := range old {
-		if x.PersistentVolumeClaim != nil{
+		if x.PersistentVolumeClaim != nil {
 			continue
 		}
 		new = append(new, x)
@@ -350,10 +348,10 @@ func mergeVolumes(old []v1.Volume, new []v1.Volume) []v1.Volume{
 	return new
 }
 
-func filterVolumeMounts(vlms []v1.Volume, vms []v1.VolumeMount) (newVms []v1.VolumeMount){
+func filterVolumeMounts(vlms []v1.Volume, vms []v1.VolumeMount) (newVms []v1.VolumeMount) {
 	for _, x := range vms {
-		for _, j := range vlms{
-			if  x.Name == j.Name{
+		for _, j := range vlms {
+			if x.Name == j.Name {
 				newVms = append(newVms, x)
 			}
 		}
