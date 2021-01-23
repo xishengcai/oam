@@ -16,11 +16,21 @@ spec:
               volumeList:
               - containerIndex: 0
                 paths:
-                - size: 20Gi
-                  path: /var/log/test
-                  storageClassName: alicloud-disk
-                  name: path-1
+#                - size: 20Gi
+#                  path: /var/log/test3
+#                  storageClassName: managed-nfs-storage
+#                  name: path-1
                 - size: 20Gi
                   path: /var/log/test2
-                  storageClassName: alicloud-disk
+                  storageClassName: managed-nfs-storage
                   name: path-2
+              - containerIndex: 1
+                paths:
+#                  - size: 20Gi
+#                    path: /var/log/test3
+#                    storageClassName: managed-nfs-storage
+#                    name: path-1
+                  - size: 20Gi
+                    path: /var/log/test2
+                    storageClassName: managed-nfs-storage
+                    name: path-2

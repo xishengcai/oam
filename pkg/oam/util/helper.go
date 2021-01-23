@@ -119,8 +119,7 @@ func LocateParentAppConfig(ctx context.Context, client client.Client, oamObject 
 }
 
 // FetchWorkload fetch the workload that a trait refers to
-func FetchWorkload(ctx context.Context, c client.Client, mLog logr.Logger, oamTrait oam.Trait) (
-	*unstructured.Unstructured, error) {
+func FetchWorkload(ctx context.Context, c client.Client, mLog logr.Logger, oamTrait oam.Trait) (*unstructured.Unstructured, error) {
 	var workload unstructured.Unstructured
 	workloadRef := oamTrait.GetWorkloadReference()
 	if len(workloadRef.Kind) == 0 || len(workloadRef.APIVersion) == 0 || len(workloadRef.Name) == 0 {

@@ -3,20 +3,20 @@ package volumetrait
 import (
 	"context"
 	"fmt"
+	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/xishengcai/oam/pkg/oam/util"
-	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
+	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
 // VolumeHandler will watch volume change and delete pvc automatically.
 type VolumeHandler struct {
+	ClientSet  *kubernetes.Clientset
 	Client     client.Client
 	AppsClient clientappv1.AppsV1Interface
 	Logger     logging.Logger
@@ -27,13 +27,29 @@ func (c *VolumeHandler) Create(evt event.CreateEvent, q workqueue.RateLimitingIn
 }
 
 func (c *VolumeHandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	//newV := evt.ObjectNew.(*v1alpha2.VolumeTrait)
+	//oldV := evt.ObjectOld.(*v1alpha2.VolumeTrait)
+	//
+	//newPvcList := newV.Status.Resources
+	//oldPvcList := oldV.Status.Resources
+	//
+	//for _, o := range oldPvcList{
+	//	if ok := findElem(newPvcList,o);!ok{
+	//		err := c.ClientSet.CoreV1().PersistentVolumeClaims(newV.Namespace).
+	//			Delete(context.Background(), o.Name, metav1.DeleteOptions{})
+	//		if err != nil {
+	//			klog.Errorf("delete pvc: %s, err %v", o.Name, err)
+	//		}
+	//		c.Logger.Info("remove old pvc", "pvcName", o.Name)
+	//	}
+	//}
 	return
 }
 
 // Delete implements EventHandler
 func (c *VolumeHandler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	if err := c.removeVolumes(evt.Meta); err != nil {
-		klog.Error("remove volumes failed, ", err)
+		c.Logger.Info("remove pvc failed", "volumeTrait", evt.Meta.GetName())
 	}
 }
 
@@ -45,86 +61,30 @@ func (c *VolumeHandler) Generic(_ event.GenericEvent, _ workqueue.RateLimitingIn
 }
 
 func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
-	var pvc v1.PersistentVolumeClaimList
-	err := c.Client.List(context.Background(), &pvc)
-	if err != nil {
-		c.Logger.Info(fmt.Sprintf("error list all  %v", err))
+
+	volumeTrait, ok := object.(*v1alpha2.VolumeTrait)
+	if !ok {
 		return nil
 	}
-	labels := object.GetLabels()
-	if labels == nil {
-		return fmt.Errorf("volumeTrait not found labels")
+
+	// delete pvc that create by volumeTrait
+	for _, resource := range volumeTrait.Status.Resources {
+		err := c.ClientSet.CoreV1().PersistentVolumeClaims(volumeTrait.Namespace).
+			Delete(context.Background(), resource.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("pvc namespace: %s, name: %s delete fialed, %v",
+				volumeTrait.Namespace, resource.Name, err)
+		}
+		c.Logger.Info("remove pvc success", "volumeTrait", object.GetName(), "pvcName", resource.Name)
 	}
-	kind := labels[util.LabelKeyChildResource]
-	name := labels[util.LabelKeyChildResourceName]
-
-	if kind == util.KindDeployment {
-		res := &appsv1.Deployment{}
-		if err = c.Client.Get(context.Background(), client.ObjectKey{Name: name, Namespace: object.GetNamespace()}, res); err != nil {
-			return err
-		}
-		volumes := res.Spec.Template.Spec.Volumes
-		var wantDeletePathName []string
-		for i := len(volumes) - 1; i >= 0; i-- {
-			if volumes[i].PersistentVolumeClaim != nil {
-				wantDeletePathName = append(wantDeletePathName, volumes[i].Name)
-				volumes = append(volumes[:i], volumes[i+1:]...)
-
-			}
-		}
-		res.Spec.Template.Spec.Volumes = volumes
-
-		for index, c := range res.Spec.Template.Spec.Containers {
-			volumeMounts := c.VolumeMounts
-			for i := len(volumeMounts) - 1; i >= 0; i-- {
-				for _, wd := range wantDeletePathName {
-					if volumeMounts[i].Name == wd {
-						volumeMounts = append(volumeMounts[:i], volumeMounts[i+1:]...)
-						break
-					}
-				}
-			}
-			res.Spec.Template.Spec.Containers[index].VolumeMounts = volumeMounts
-		}
-
-		res.ResourceVersion = ""
-		if err := c.Client.Update(context.Background(), res); err != nil {
-			return err
-		}
-
-	} else if kind == util.KindStatefulSet {
-		// TODO: 需要优化，代码重复
-		res := &appsv1.StatefulSet{}
-		if err = c.Client.Get(context.Background(), client.ObjectKey{Name: name, Namespace: object.GetNamespace()}, res); err != nil {
-			return err
-		}
-		volumes := res.Spec.Template.Spec.Volumes
-		var wantDeletePathName []string
-		for i := len(volumes) - 1; i >= 0; i-- {
-			if volumes[i].PersistentVolumeClaim != nil {
-				wantDeletePathName = append(wantDeletePathName, volumes[i].Name)
-				volumes = append(volumes[:i], volumes[i+1:]...)
-			}
-		}
-		res.Spec.Template.Spec.Volumes = volumes
-
-		for index, c := range res.Spec.Template.Spec.Containers {
-			volumeMounts := c.VolumeMounts
-			for i := len(volumeMounts) - 1; i >= 0; i-- {
-				for _, wd := range wantDeletePathName {
-					if volumeMounts[i].Name == wd {
-						volumeMounts = append(volumeMounts[:i], volumeMounts[i+1:]...)
-					}
-				}
-			}
-			res.Spec.Template.Spec.Containers[index].VolumeMounts = volumeMounts
-		}
-
-		res.ResourceVersion = ""
-		if err := c.Client.Update(context.Background(), res); err != nil {
-			return err
-		}
-	}
-
 	return nil
+}
+
+func findElem(array []v1alpha1.TypedReference,elem v1alpha1.TypedReference) bool{
+	for _, a := range array{
+		if a.UID == elem.UID{
+			return true
+		}
+	}
+	return false
 }
