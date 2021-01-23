@@ -34,7 +34,7 @@ const (
 	TraitTypeLabel = "trait.oam.dev/type"
 
 	// serviceMesh must set version selector
-	LabelVersion = "version"
+	LabelVersion   = "version"
 	LabelVersionV1 = "v1"
 	LabelVersionV2 = "v2"
 )

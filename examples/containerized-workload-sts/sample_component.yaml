@@ -10,8 +10,13 @@ spec:
       name: oam-component-sts
     spec:
       containers:
-        - name: wordpress
-          image: wordpress:php7.2
+        - name: nginx1
+          image: nginx
           ports:
             - containerPort: 80
-              name: wordpress
+              name: nginx
+        - name: sockjs
+          image: xishengcai/sockjs
+          ports:
+            - containerPort: 8080
+              name: sockjs

@@ -77,17 +77,17 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &canaryTrait)
 	if eventObj == nil {
 		canaryLog.Error(err, "Failed to find the parent resource", "canaryTrait", canaryTrait.Name)
-		eventObj = &canaryTrait
+		return ctrl.Result{}, nil
 	}
 
-	_, err = r.renderDestinationRule(ctx, canaryTrait)
+	_, err = r.renderDestinationRule(canaryTrait)
 	if err != nil {
 		canaryLog.Error(err, "Error renderDestinationRule", "canary", err)
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &canaryTrait,
 			cpv1alpha1.ReconcileError(err))
 	}
 
-	_, err = r.renderVirtualService(ctx, canaryTrait)
+	_, err = r.renderVirtualService(canaryTrait)
 	if err != nil {
 		canaryLog.Error(err, "Error renderVirtualService", "canary", err)
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &canaryTrait,

@@ -3,31 +3,29 @@ package hpatrait
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
+	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
-	"github.com/pkg/errors"
+
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
-	"strings"
 
-	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 )
 
 // Reconcile error strings.
 const (
-	errLocateWorkload          = "cannot find workload"
-	errLocateResources         = "cannot find resources"
 	errLocateAvailableResouces = "cannot find available resources"
-	errRenderService           = "cannot render service"
 	errApplyHPA                = "cannot apply the HPA"
 	errGCHPA                   = "cannot clean up HPA"
 )
@@ -44,7 +42,7 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 		log:             ctrl.Log.WithName("hpaTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("hpaTrait")),
 		Scheme:          mgr.GetScheme(),
-		dm : dm,
+		dm:              dm,
 	}
 	return r.SetupWithManager(mgr)
 }
@@ -115,7 +113,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// render HPAs
 	// it's possible that one component contains more than one deployment or statefulset.
 	// then each deployment or statefulset deserves one HPA.
-	hpas, err := r.renderHPA(ctx, &hpaTrait, resources)
+	hpas, err := r.renderHPA(&hpaTrait, resources)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -156,7 +154,6 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// delete existing HPAs referred to this HPAtrait
 	if err := r.cleanUpLegacyHPAs(ctx, &hpaTrait, hpaUIDs); err != nil {
-		r.log.Error(err, "Failed to delete legacy HPAs")
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errGCHPA)))
 	}

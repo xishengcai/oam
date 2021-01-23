@@ -63,4 +63,18 @@ type PathItem struct {
 2. pvc 创建后不能修改大小
 3. VolumeTrait 只支持重建，不支持修改
     
+## pvc create
+
+### 支持 storage class update
+1. get pvc
+2. 比较pvc. storageclass
+   no delete old
+   create new pvc
+   
+   new pvc uid list
+3. gc
+   compare pvcUid && volumeTrait status resource  pvc
+   if pvc.uid not in pvcUid
+        delete
+
 
