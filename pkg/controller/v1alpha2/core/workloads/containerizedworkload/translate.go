@@ -48,12 +48,13 @@ var (
 
 // Reconcile error strings.
 const (
-	labelKey                 = "containerizedworkload.oam.crossplane.io"
-	sidecarInjectionLabelKey = "istio-injection"
-
+	sidecarInjectionLabelKey    = "istio-injection"
 	errNotContainerizedWorkload = "object is not a containerized workload"
 )
 
+// ChildWorkload containerized workload can transform to sts or deployment
+// if firstCreate has VolumeTrait,ChildWorkload is sts
+// else deployment
 type ChildWorkload struct {
 	Type string
 	runtime.TypeMeta
@@ -287,15 +288,15 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 			Name:      w.GetName(),
 			Namespace: w.GetNamespace(),
 			Labels: map[string]string{
-				util.LabelAppId:       w.GetLabels()[util.LabelAppId],
-				util.LabelComponentId: w.GetName(),
-				"app": w.GetLabels()[util.LabelAppId],
+				util.LabelAppID:       w.GetLabels()[util.LabelAppID],
+				util.LabelComponentID: w.GetName(),
+				"app":                 w.GetLabels()[util.LabelAppID],
 			},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				util.LabelComponentId: w.GetName(),
-				"app": w.GetLabels()[util.LabelAppId],
+				util.LabelComponentID: w.GetName(),
+				"app":                 w.GetLabels()[util.LabelAppID],
 			},
 			Ports: []corev1.ServicePort{},
 			Type:  corev1.ServiceTypeClusterIP,
@@ -330,7 +331,8 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 	return svc, nil
 }
 
-func TransDepToSts(deploy *appsv1.Deployment) oam.Object {
+// deployment transform to  statefulSet
+func transDepToSts(deploy *appsv1.Deployment) oam.Object {
 	sts := &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       statefulKind,
@@ -351,23 +353,23 @@ func setInjectLabel(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
 		d.Spec.Template.Labels[sidecarInjectionLabelKey] = "enabled"
 	} else {
 		delete(d.Spec.Template.Labels, sidecarInjectionLabelKey)
-		delete(d.Spec.Selector.MatchLabels,sidecarInjectionLabelKey)
+		delete(d.Spec.Selector.MatchLabels, sidecarInjectionLabelKey)
 	}
 }
 
 func getVersion(pointToGrayName string) string {
 	if pointToGrayName == "" {
 		return oam.LabelVersionV1
-	} else {
-		return oam.LabelVersionV2
 	}
+
+	return oam.LabelVersionV2
 }
 
 func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 	labels := map[string]string{
-		util.LabelAppId:       cw.Labels[util.LabelAppId],
-		util.LabelComponentId: cw.GetName(),
-		"app": cw.GetLabels()[util.LabelAppId],
+		util.LabelAppID:       cw.Labels[util.LabelAppID],
+		util.LabelComponentID: cw.GetName(),
+		"app":                 cw.GetLabels()[util.LabelAppID],
 	}
 	if cw.Spec.PointToGrayName != nil {
 		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)
@@ -401,7 +403,7 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 // 如果是灰度组件，需要修改app component id
 func modifyLabelSelector(pointToGrayName *string, d *appsv1.Deployment) {
 	if pointToGrayName != nil {
-		d.Labels[util.LabelComponentId] = *pointToGrayName
+		d.Labels[util.LabelComponentID] = *pointToGrayName
 	}
 }
 

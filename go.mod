@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
-	github.com/crossplane/crossplane-runtime v0.10.0
+	github.com/crossplane/crossplane-runtime v0.11.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.1.0
@@ -36,4 +36,8 @@ require (
 	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451
 	sigs.k8s.io/controller-runtime v0.6.2
 	sigs.k8s.io/controller-tools v0.2.4
+)
+
+replace (
+	github.com/crossplane/crossplane-runtime => github.com/crossplane/crossplane-runtime v0.11.0
 )
