@@ -370,10 +370,12 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 		util.LabelAppID:       cw.Labels[util.LabelAppID],
 		util.LabelComponentID: cw.GetName(),
 		"app":                 cw.GetLabels()[util.LabelAppID],
+		oam.LabelVersion: oam.LabelVersionV1,
 	}
 	if cw.Spec.PointToGrayName != nil {
 		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)
 	}
+
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       deploymentKind,
