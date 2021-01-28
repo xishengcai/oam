@@ -1,8 +1,9 @@
 package canarytrait
 
 import (
-	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	"reflect"
+
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 const (

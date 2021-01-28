@@ -21,18 +21,18 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
-	"k8s.io/apimachinery/pkg/runtime"
 	"path"
 	"reflect"
-
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/pkg/oam/util"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var (
@@ -370,7 +370,7 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 		util.LabelAppID:       cw.Labels[util.LabelAppID],
 		util.LabelComponentID: cw.GetName(),
 		"app":                 cw.GetLabels()[util.LabelAppID],
-		oam.LabelVersion: oam.LabelVersionV1,
+		oam.LabelVersion:      oam.LabelVersionV1,
 	}
 	if cw.Spec.PointToGrayName != nil {
 		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)

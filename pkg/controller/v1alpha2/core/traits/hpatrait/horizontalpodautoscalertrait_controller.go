@@ -78,7 +78,6 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	hpaLog := r.log.WithValues("hpaTrait ", req.NamespacedName)
-
 	hpaLog.Info("Reconcile HorizontalPodAutoscalerTrait")
 
 	var hpaTrait oamv1alpha2.HorizontalPodAutoscalerTrait
@@ -132,8 +131,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(hpa.Name)}
 		if err := r.Patch(ctx, hpa, client.Apply, applyOpts...); err != nil {
 			r.log.Error(err, "Failed to apply a HPA", "Target HPA spec", hpa, "Total HPA count", len(hpas))
-			return util.ReconcileWaitResult,
-				util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyHPA)))
+			return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyHPA)))
 		}
 		r.log.Info("Successfully applied a HPA", "UID", hpa.UID)
 
@@ -146,7 +144,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		})
 		hpaUIDs = append(hpaUIDs, hpa.GetUID())
 		if err := r.Status().Update(ctx, &hpaTrait); err != nil {
-			r.log.Info("Failed update HPA_trait status", "err:", err)
+			r.log.Error(err, "Failed update HPA_trait status")
 			return util.ReconcileWaitResult, err
 		}
 		r.log.Info("Successfully update HPA_trait status", "UID", hpaTrait.GetUID())
@@ -154,8 +152,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// delete existing HPAs referred to this HPAtrait
 	if err := r.cleanUpLegacyHPAs(ctx, &hpaTrait, hpaUIDs); err != nil {
-		return util.ReconcileWaitResult,
-			util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errGCHPA)))
+		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errGCHPA)))
 	}
 
 	return ctrl.Result{}, util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileSuccess())
