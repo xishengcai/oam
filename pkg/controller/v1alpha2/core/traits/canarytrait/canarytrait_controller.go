@@ -2,21 +2,23 @@ package canarytrait
 
 import (
 	"context"
+	"strings"
+
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/go-logr/logr"
+	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
-	"k8s.io/client-go/discovery"
-	"strings"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/discovery"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 )
 
