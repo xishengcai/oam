@@ -18,15 +18,18 @@ package containerizedworkload
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
+	"reflect"
+	"strings"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"strings"
+	"k8s.io/klog/v2"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,12 +45,12 @@ import (
 
 // Reconcile error strings.
 const (
-	errRenderWorkload   = "cannot render workload"
-	errApplyChildResource= "cannot apply the childResource"
-	errRenderService    = "cannot render service"
-	errApplyService     = "cannot apply the service"
-	errGcService        = "cannot gc the service"
-	errApplyConfigMap   = "cannot apply the configMap"
+	errRenderWorkload     = "cannot render workload"
+	errApplyChildResource = "cannot apply the childResource"
+	errRenderService      = "cannot render service"
+	errApplyService       = "cannot apply the service"
+	errGcService          = "cannot gc the service"
+	errApplyConfigMap     = "cannot apply the configMap"
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
@@ -67,7 +70,6 @@ type Reconciler struct {
 	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
-	childResource []string
 }
 
 // Reconcile reconciles a ContainerizedWorkload object
@@ -90,22 +92,16 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	//log.Info("Get the workload", "apiVersion", workload.APIVersion, "kind", workload.Kind)
 	// find the resource object to record the event to, default is the parent appConfig.
-
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &workload)
 	if eventObj == nil {
-		// fallback to workload itself
-		log.Error(err, "workload", workload.Name)
+		log.Error(err, "LocateParentAppConfig failed", "workloadName", workload.Name)
 		eventObj = &workload
 	}
 
 	// applicationConfiguration write label by workload child define
 	if workload.Labels == nil {
-		log.Info("label is nil, default child resource deployment")
+		return ctrl.Result{}, errors.New("label is nil, default child resource deployment")
 	}
-
-	//r.childResource = childResourceValue
-	workload.Status.Resources = nil
-	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(workload.GetUID())}
 
 	childObject, err := r.renderChildResource(&workload)
 	if err != nil {
@@ -114,6 +110,10 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderWorkload)))
 	}
+	r.checkLabelSelect(ctx, &workload, childObject)
+	//r.childResource = childResourceValue
+	workload.Status.Resources = nil
+	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(workload.GetUID())}
 
 	//server side apply, only the fields we set are touched
 	if err := r.Patch(ctx, childObject, client.Apply, applyOpts...); err != nil {
@@ -184,7 +184,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// PointToGrayName is gray workload
-	if service != nil{
+	if service != nil {
 		// server side apply the service
 		if err := r.Patch(ctx, service, client.Apply, applyOpts...); err != nil {
 			log.Error(err, "Failed to apply a service")
@@ -212,8 +212,6 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		)
 	}
 
-
-
 	if err := r.Status().Update(ctx, &workload); err != nil {
 		return util.ReconcileWaitResult, err
 	}
@@ -232,4 +230,38 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&corev1.ConfigMap{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
+}
+
+func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.ContainerizedWorkload, childObject runtime.Object) {
+	switch workload.Labels[util.LabelKeyChildResource] {
+	case util.KindDeployment:
+		dep := childObject.(*appsv1.Deployment)
+		emptyChild := &appsv1.Deployment{}
+		err := r.Get(ctx, client.ObjectKey{Namespace: workload.Namespace, Name: workload.Name}, emptyChild)
+		if err == nil {
+			if !reflect.DeepEqual(dep.Spec.Selector.MatchLabels, emptyChild.Spec.Selector.MatchLabels) {
+				err = r.Client.Delete(ctx, emptyChild)
+				if err != nil {
+					klog.Error("failed delete deployment ", emptyChild.Name)
+				} else {
+					klog.Info("success delete deployment ", emptyChild.Name)
+				}
+			}
+		}
+	case util.KindStatefulSet:
+		sts := childObject.(*appsv1.StatefulSet)
+		emptyChild := &appsv1.StatefulSet{}
+		err := r.Get(ctx, client.ObjectKey{Namespace: workload.Namespace, Name: workload.Name}, emptyChild)
+		if err == nil {
+			if !reflect.DeepEqual(sts.Spec.Selector.MatchLabels, emptyChild.Spec.Selector.MatchLabels) {
+				err = r.Client.Delete(ctx, emptyChild)
+				if err != nil {
+					klog.Error("failed delete statefulSet ", emptyChild.Name)
+				} else {
+					klog.Info("success delete statefulSet ", emptyChild.Name)
+				}
+			}
+		}
+	}
+
 }

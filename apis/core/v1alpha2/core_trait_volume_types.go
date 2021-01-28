@@ -32,11 +32,13 @@ type VolumeTraitSpec struct {
 	WorkloadReference runtimev1alpha1.TypedReference `json:"workloadRef"`
 }
 
+// VolumeMountItem contains path of container
 type VolumeMountItem struct {
 	ContainerIndex int        `json:"containerIndex"`
 	Paths          []PathItem `json:"paths"`
 }
 
+// PathItem define storageClass, size, path, name
 type PathItem struct {
 	StorageClassName string `json:"storageClassName"`
 	Size             string `json:"size"`

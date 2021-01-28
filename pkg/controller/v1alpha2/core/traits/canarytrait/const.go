@@ -7,7 +7,7 @@ import (
 
 const (
 	canaryTypeTraffic = "traffic"
-	canaryTypeHeader  = "header"
+	//canaryTypeHeader  = "header"
 )
 
 var (

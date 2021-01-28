@@ -7,8 +7,9 @@ import (
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -34,24 +35,26 @@ import (
 
 // Reconcile error strings.
 const (
-	errQueryOpenAPI = "failed to query openAPI"
-	errMountVolume  = "cannot scale the resource"
-	errApplyPVC     = "cannot apply the pvc"
+	errMountVolume = "cannot scale the resource"
+	errApplyPVC    = "cannot apply the pvc"
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager,args controller.Args, log logging.Logger) error {
+func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
+
+	clientSet := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	r := Reconcile{
+		clientSet:       clientSet,
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
 		log:             ctrl.Log.WithName("VolumeTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeTrait")),
 		Scheme:          mgr.GetScheme(),
-		dm: dm,
+		dm:              dm,
 	}
 	return r.SetupWithManager(mgr, log)
 
@@ -59,6 +62,7 @@ func Setup(mgr ctrl.Manager,args controller.Args, log logging.Logger) error {
 
 // Reconcile reconciles a VolumeTrait object
 type Reconcile struct {
+	clientSet *kubernetes.Clientset
 	client.Client
 	discovery.DiscoveryClient
 	dm     discoverymapper.DiscoveryMapper
@@ -76,8 +80,10 @@ func (r *Reconcile) SetupWithManager(mgr ctrl.Manager, log logging.Logger) error
 		For(&oamv1alpha2.VolumeTrait{}).
 		Owns(&v1.PersistentVolumeClaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&source.Kind{Type: &oamv1alpha2.VolumeTrait{}}, &VolumeHandler{
+			ClientSet:  r.clientSet,
 			Client:     mgr.GetClient(),
-			Logger:     log,
+			Logger:     r.log.WithValues("volume trait delete", "..."),
+			dm:         r.dm,
 			AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
 		}).
 		Complete(r)
@@ -127,12 +133,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &volumeTrait,
 			cpv1alpha1.ReconcileError(fmt.Errorf(util.ErrFetchChildResources)))
 	}
-
-	// include the workload itself if there is no child resources
-	if len(resources) == 0 {
-		resources = append(resources, workload)
-	}
-
 	// Scale the child resources that we know how to scale
 	result, err := r.mountVolume(ctx, mLog, &volumeTrait, resources)
 	if err != nil {
@@ -155,11 +155,10 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 	var statusResources []cpv1alpha1.TypedReference
 
 	// find the resource object to record the event to, default is the parent appConfig.
-	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, volumeTrait)
-	if eventObj == nil {
-		// fallback to workload itself
+	appConfig, err := util.LocateParentAppConfig(ctx, r.Client, volumeTrait)
+	if appConfig == nil {
 		mLog.Error(err, "Failed to find the parent resource", "volumeTrait", volumeTrait.Name)
-		eventObj = volumeTrait
+		appConfig = volumeTrait
 	}
 
 	// Update owner references
@@ -177,20 +176,18 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 			continue
 		}
 		resPatch := client.MergeFrom(res.DeepCopyObject())
-		mLog.Info("Get the resource the trait is going to modify",
-			"resource name", res.GetName(), "UID", res.GetUID())
 		cpmeta.AddOwnerReference(res, ownerRef)
-
 		spec, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec")
-		ovmInterface, _ := spec.(map[string]interface{})["volumes"].([]interface{})
-		var oldVolumes []v1.Volume
-		if len(ovmInterface) != 0 {
-			b, _ := json.Marshal(ovmInterface)
-			_ = json.Unmarshal(b, &oldVolumes)
-		}
+		oldVolumes := getVolumesFromSpec(spec)
 
-		var volumes []v1.Volume
-		var pvcList []v1.PersistentVolumeClaim
+		var volumes []v1.Volume                 // 重新构建 volumes
+		var pvcList []*v1.PersistentVolumeClaim // 重新构建pvc
+
+		// volume 是列表， 因为可能有多个容器
+		// 从 sts or deploy中找出容器
+		containers, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec", "containers")
+
+		// 遍历挂载特性中的VolumeList字段
 		for _, item := range volumeTrait.Spec.VolumeList {
 			var volumeMounts []v1.VolumeMount
 			for pathIndex, path := range item.Paths {
@@ -204,7 +201,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 					MountPath: path.Path,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
-				pvcList = append(pvcList, v1.PersistentVolumeClaim{
+				pvcList = append(pvcList, &v1.PersistentVolumeClaim{
 					TypeMeta: metav1.TypeMeta{
 						APIVersion: "v1",
 						Kind:       util.KindPersistentVolumeClaim,
@@ -221,80 +218,58 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 						},
 						Resources: v1.ResourceRequirements{
 							Requests: v1.ResourceList{
-								v1.ResourceName(v1.ResourceStorage): resource.MustParse(path.Size),
+								v1.ResourceStorage: resource.MustParse(path.Size),
 							},
 						},
 					},
 				})
 			}
-
-			containers, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec", "containers")
-			c, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
-			vmInterface, _ := c["volumeMounts"].([]interface{})
-
-			if len(vmInterface) != 0 {
-				var vms []v1.VolumeMount
-				b, _ := json.Marshal(vmInterface)
-				_ = json.Unmarshal(b, &vms)
-				for _, o := range vms {
-					for _, v := range oldVolumes {
-						if v.Name == o.Name && v.PersistentVolumeClaim == nil {
-							volumeMounts = append(volumeMounts, o)
-						}
-					}
-				}
+			if item.ContainerIndex > len(containers.([]interface{}))-1 {
+				return ctrl.Result{}, fmt.Errorf("container Index out of range")
 			}
+			c, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
+			oldVolumeMounts := getVolumeMountsFromContainer(c)
+
+			// 找出非pvc的volumeMounts
+			volumeMounts = append(volumeMounts, getHasPvcVolumeMounts(oldVolumes, oldVolumeMounts)...)
+
 			c["volumeMounts"] = volumeMounts
 
 		}
-		for _, oldVm := range oldVolumes {
-			if oldVm.PersistentVolumeClaim == nil {
-				volumes = append(volumes, oldVm)
-			}
-		}
+		// 继续构建volumes， 遍历old volumes， 找到pvc == nil的，追加到数组中
+		volumes = mergeVolumes(oldVolumes, volumes)
 		spec.(map[string]interface{})["volumes"] = volumes
 
-		// merge patch to modify the pvc
-		var pvcUidList []types.UID
+		// 多容器时， 对每个容器遍历，删除之前有pvc，但是现在没有的
+		for _, ci := range containers.([]interface{}) {
+			c := ci.(map[string]interface{})
+			vms := getVolumeMountsFromContainer(c)
+			newVms := filterVolumeMounts(volumes, vms)
+			c["volumeMounts"] = newVms
+		}
 
-		applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(volumeTrait.GetUID())}
+		var pvcNameList []string
 		for _, pvc := range pvcList {
-			pvcExists := &v1.PersistentVolumeClaim{}
-			if err := r.Client.Get(ctx, client.ObjectKey{Name: pvc.Name, Namespace: pvc.Namespace}, pvcExists); err == nil {
-				mLog.Info("pvc has been created. Can't modify spec", "pvcName", pvc.Name)
-				pvcUidList = append(pvcUidList, pvcExists.UID)
-				statusResources = append(statusResources,
-					cpv1alpha1.TypedReference{
-						APIVersion: pvcExists.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-						Kind:       pvcExists.GetObjectKind().GroupVersionKind().Kind,
-						Name:       pvcExists.GetName(),
-						UID:        pvcExists.UID,
-					},
-				)
-				continue
+			pvcTemp, err := r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
+				if err != nil {
+					mLog.Info("create pvc failed", "pvcName", pvc.Name)
+					continue
+				}
 			}
-
-			cpmeta.AddOwnerReference(&pvc, ownerRef)
-			if err := r.Patch(ctx, &pvc, client.Apply, applyOpts...); err != nil {
-				mLog.Error(err, "Failed to create a pvc")
-				return util.ReconcileWaitResult,
-					util.PatchCondition(ctx, r, volumeTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errMountVolume)))
-			}
-			r.record.Event(eventObj, event.Normal("PVC created",
-				fmt.Sprintf("VolumeTrait `%s` successfully server side patched a pvc `%s`",
+			r.record.Event(appConfig, event.Normal("PVC created",
+				fmt.Sprintf("VolumeTrait `%s` successfully server side create a pvc `%s`",
 					volumeTrait.Name, pvc.Name)))
-
-			pvcUidList = append(pvcUidList, pvc.UID)
-
+			pvcNameList = append(pvcNameList, pvc.Name)
 			statusResources = append(statusResources,
 				cpv1alpha1.TypedReference{
-					APIVersion: pvc.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:       pvc.GetObjectKind().GroupVersionKind().Kind,
-					Name:       pvc.GetName(),
-					UID:        pvc.UID,
+					APIVersion: pvcTemp.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+					Kind:       pvcTemp.GetObjectKind().GroupVersionKind().Kind,
+					Name:       pvcTemp.GetName(),
+					UID:        pvcTemp.UID,
 				},
 			)
-
 		}
 
 		// merge patch to modify the resource
@@ -304,9 +279,9 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 				util.PatchCondition(ctx, r, volumeTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errMountVolume)))
 		}
 
-		if err := r.cleanupResources(ctx, volumeTrait, pvcUidList); err != nil {
+		if err := r.cleanupResources(ctx, volumeTrait, pvcNameList); err != nil {
 			mLog.Error(err, "Failed to clean up resources")
-			r.record.Event(eventObj, event.Warning(errApplyPVC, err))
+			r.record.Event(appConfig, event.Warning(errApplyPVC, err))
 		}
 		mLog.Info("Successfully patch a resource", "resource GVK", res.GroupVersionKind().String(),
 			"res UID", res.GetUID(), "target volumeClaimTemplates", volumeTrait.Spec.VolumeList)
@@ -319,4 +294,65 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func getVolumeMountsFromContainer(container map[string]interface{}) (vms []v1.VolumeMount) {
+	vmInterface, ok := container["volumeMounts"]
+	if !ok {
+		return
+	}
+	b, err := json.Marshal(vmInterface)
+	if err != nil {
+		return
+	}
+	_ = json.Unmarshal(b, &vms)
+	return
+}
+
+func getVolumesFromSpec(spec interface{}) (vls []v1.Volume) {
+	vlsInterface, ok := spec.(map[string]interface{})["volumes"].([]interface{})
+	if !ok {
+		return
+	}
+	b, err := json.Marshal(vlsInterface)
+	if err != nil {
+		return
+	}
+	_ = json.Unmarshal(b, &vls)
+	return
+}
+
+func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMounts []v1.VolumeMount) {
+	for _, x := range vls {
+		if x.PersistentVolumeClaim != nil {
+			continue
+		}
+		for _, j := range vms {
+			if j.Name == x.Name {
+				noPvcVolumeMounts = append(noPvcVolumeMounts, j)
+			}
+		}
+	}
+	return
+}
+
+func mergeVolumes(old []v1.Volume, new []v1.Volume) []v1.Volume {
+	for _, x := range old {
+		if x.PersistentVolumeClaim != nil {
+			continue
+		}
+		new = append(new, x)
+	}
+	return new
+}
+
+func filterVolumeMounts(vlms []v1.Volume, vms []v1.VolumeMount) (newVms []v1.VolumeMount) {
+	for _, x := range vms {
+		for _, j := range vlms {
+			if x.Name == j.Name {
+				newVms = append(newVms, x)
+			}
+		}
+	}
+	return
 }

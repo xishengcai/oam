@@ -48,12 +48,13 @@ var (
 
 // Reconcile error strings.
 const (
-	labelKey                 = "containerizedworkload.oam.crossplane.io"
-	sidecarInjectionLabelKey = "istio-injection"
-
+	sidecarInjectionLabelKey    = "istio-injection"
 	errNotContainerizedWorkload = "object is not a containerized workload"
 )
 
+// ChildWorkload containerized workload can transform to sts or deployment
+// if firstCreate has VolumeTrait,ChildWorkload is sts
+// else deployment
 type ChildWorkload struct {
 	Type string
 	runtime.TypeMeta
@@ -70,10 +71,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 		return nil, errors.New(errNotContainerizedWorkload)
 	}
 
-
 	d := renderDeployment(cw)
 	setInjectLabel(cw, d)
-	modifyLabelSelector(cw.Spec.PointToGrayName,d)
+	modifyLabelSelector(cw.Spec.PointToGrayName, d)
+	setNodeSelect(cw, d)
 
 	for _, container := range cw.Spec.Containers {
 		if container.ImagePullSecret != nil {
@@ -162,6 +163,7 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 		}
 		d.Spec.Template.Spec.Containers = append(d.Spec.Template.Spec.Containers, kubernetesContainer)
 	}
+
 	return d, nil
 }
 
@@ -286,13 +288,15 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 			Name:      w.GetName(),
 			Namespace: w.GetNamespace(),
 			Labels: map[string]string{
-				util.LabelAppId: w.GetLabels()[util.LabelAppId],
-				util.LabelComponentId: w.GetName(),
+				util.LabelAppID:       w.GetLabels()[util.LabelAppID],
+				util.LabelComponentID: w.GetName(),
+				"app":                 w.GetLabels()[util.LabelAppID],
 			},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				util.LabelComponentId: w.GetName(),
+				util.LabelComponentID: w.GetName(),
+				"app":                 w.GetLabels()[util.LabelAppID],
 			},
 			Ports: []corev1.ServicePort{},
 			Type:  corev1.ServiceTypeClusterIP,
@@ -327,7 +331,8 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 	return svc, nil
 }
 
-func TransDepToSts(deploy *appsv1.Deployment) oam.Object {
+// deployment transform to  statefulSet
+func transDepToSts(deploy *appsv1.Deployment) oam.Object {
 	sts := &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       statefulKind,
@@ -348,26 +353,29 @@ func setInjectLabel(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
 		d.Spec.Template.Labels[sidecarInjectionLabelKey] = "enabled"
 	} else {
 		delete(d.Spec.Template.Labels, sidecarInjectionLabelKey)
+		delete(d.Spec.Selector.MatchLabels, sidecarInjectionLabelKey)
 	}
 }
 
 func getVersion(pointToGrayName string) string {
 	if pointToGrayName == "" {
 		return oam.LabelVersionV1
-	} else {
-		return oam.LabelVersionV2
 	}
+
+	return oam.LabelVersionV2
 }
 
-
-func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
-	if cw.Labels[util.LabelAppId] == ""{
-		panic("label app id is null")
-	}
+func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 	labels := map[string]string{
-		util.LabelAppId:       cw.Labels[util.LabelAppId],
-		util.LabelComponentId: cw.GetName(),
-		oam.LabelVersion: getVersion(cw.Spec.PointToGrayName),
+		util.LabelAppID:       cw.Labels[util.LabelAppID],
+		util.LabelComponentID: cw.GetName(),
+		"app":                 cw.GetLabels()[util.LabelAppID],
+		"version": "v1",
+	}
+	if cw.Spec.PointToGrayName != nil {
+		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)
+	}else{
+		labels[oam.LabelVersion] = oam.LabelVersionV1
 	}
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -378,6 +386,9 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
 			Name:      cw.GetName(),
 			Namespace: cw.GetNamespace(),
 			Labels:    labels,
+			Annotations: map[string]string{
+				"logCollect": "true",
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -393,8 +404,14 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment{
 }
 
 // 如果是灰度组件，需要修改app component id
-func modifyLabelSelector(pointToGrayName string,d *appsv1.Deployment){
-	if pointToGrayName != ""{
-		d.Labels[util.LabelComponentId] = pointToGrayName
+func modifyLabelSelector(pointToGrayName *string, d *appsv1.Deployment) {
+	if pointToGrayName != nil {
+		d.Labels[util.LabelComponentID] = *pointToGrayName
+	}
+}
+
+func setNodeSelect(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
+	if cw.Spec.NodeSelector != nil {
+		d.Spec.Template.Spec.NodeSelector = *cw.Spec.NodeSelector
 	}
 }

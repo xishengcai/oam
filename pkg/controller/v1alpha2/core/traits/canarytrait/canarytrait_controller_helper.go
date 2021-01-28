@@ -10,7 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func (r *Reconciler) renderDestinationRule(ctx context.Context, trait oamv1alpha2.CanaryTrait) (*v1alpha3.DestinationRule, error) {
+func (r *Reconciler) renderDestinationRule(trait oamv1alpha2.CanaryTrait) (*v1alpha3.DestinationRule, error) {
 	// create destinationRule
 	destinationRule := v1alpha3.DestinationRule{
 		TypeMeta: metav1.TypeMeta{
@@ -37,7 +37,6 @@ func (r *Reconciler) renderDestinationRule(ctx context.Context, trait oamv1alpha
 		},
 	}
 
-
 	if err := ctrl.SetControllerReference(&trait, &destinationRule, r.Scheme); err != nil {
 		return nil, err
 	}
@@ -47,7 +46,7 @@ func (r *Reconciler) renderDestinationRule(ctx context.Context, trait oamv1alpha
 		return dr, err
 	}
 
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	dr.Spec = destinationRule.Spec
@@ -56,7 +55,7 @@ func (r *Reconciler) renderDestinationRule(ctx context.Context, trait oamv1alpha
 
 }
 
-func (r *Reconciler) renderVirtualService(ctx context.Context, trait oamv1alpha2.CanaryTrait) (*v1alpha3.VirtualService, error) {
+func (r *Reconciler) renderVirtualService(trait oamv1alpha2.CanaryTrait) (*v1alpha3.VirtualService, error) {
 	// create virtualService
 	virtualService := v1alpha3.VirtualService{
 		TypeMeta: metav1.TypeMeta{
@@ -106,7 +105,7 @@ func (r *Reconciler) renderVirtualService(ctx context.Context, trait oamv1alpha2
 		return vs, err
 	}
 
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 

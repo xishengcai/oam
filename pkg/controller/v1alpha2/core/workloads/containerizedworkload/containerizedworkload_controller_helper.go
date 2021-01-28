@@ -14,6 +14,7 @@ import (
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam/util"
 )
+
 // create a corresponding deployment
 func (r *Reconciler) renderChildResource(workload *v1alpha2.ContainerizedWorkload) (runtime.Object, error) {
 
@@ -23,7 +24,7 @@ func (r *Reconciler) renderChildResource(workload *v1alpha2.ContainerizedWorkloa
 	}
 
 	if workload.Labels[util.LabelKeyChildResource] == util.KindStatefulSet {
-		resource = TransDepToSts(resource.(*appsv1.Deployment))
+		resource = transDepToSts(resource.(*appsv1.Deployment))
 	}
 	if err := ctrl.SetControllerReference(workload, resource, r.Scheme); err != nil {
 		return nil, err
