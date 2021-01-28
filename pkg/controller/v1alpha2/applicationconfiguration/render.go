@@ -20,23 +20,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"strconv"
 	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
@@ -124,7 +125,9 @@ func (r *components) Render(ctx context.Context, ac *v1alpha2.ApplicationConfigu
 	return res, ds, nil
 }
 
-func (r *components) renderComponent(ctx context.Context, acc v1alpha2.ApplicationConfigurationComponent, ac *v1alpha2.ApplicationConfiguration, dag *dag) (*Workload, error) {
+func (r *components) renderComponent(ctx context.Context,
+	acc v1alpha2.ApplicationConfigurationComponent,
+	ac *v1alpha2.ApplicationConfiguration, dag *dag) (*Workload, error) {
 	if acc.RevisionName != "" {
 		acc.ComponentName = ExtractComponentName(acc.RevisionName)
 	}
