@@ -232,6 +232,10 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	}
 	acPatch := ac.DeepCopy()
 
+	if ac.Spec.Components == nil|| len(ac.Spec.Components)==0{
+		return reconcile.Result{}, nil
+	}
+
 	if ac.ObjectMeta.DeletionTimestamp.IsZero() {
 		if registerFinalizers(ac) {
 			log.Debug("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
