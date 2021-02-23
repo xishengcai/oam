@@ -28,8 +28,8 @@ var _ oam.Trait = &CanaryTrait{}
 type CanaryTraitSpec struct {
 	// Type used by the server listening on this port.
 	// +kubebuilder:validation:Enum=traffic;header
-	// +optional
 	Type string `json:"type"` // 灰度发布策略类型
+
 	// +optional
 	Header map[string]string `json:"header,omitempty"`
 
