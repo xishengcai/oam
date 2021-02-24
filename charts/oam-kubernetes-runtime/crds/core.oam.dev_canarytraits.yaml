@@ -33,6 +33,7 @@ spec:
           metadata:
             type: object
           spec:
+            description: CanaryTraitSpec 灰度发布策略
             properties:
               header:
                 additionalProperties:
@@ -67,6 +68,8 @@ spec:
                 - kind
                 - name
                 type: object
+            required:
+            - type
             type: object
           status:
             description: A CanaryTraitStatus represents the observed state of a CanaryTrait.

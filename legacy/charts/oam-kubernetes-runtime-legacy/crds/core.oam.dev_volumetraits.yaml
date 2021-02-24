@@ -37,11 +37,13 @@ spec:
           properties:
             volumeList:
               items:
+                description: VolumeMountItem contains path of container
                 properties:
                   containerIndex:
                     type: integer
                   paths:
                     items:
+                      description: PathItem define storageClass, size, path, name
                       properties:
                         name:
                           type: string
