@@ -13,6 +13,7 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 	applicationconfiguration.RegisterMutatingHandler(mgr)
+
 	if err := component.RegisterMutatingHandler(mgr); err != nil {
 		return err
 	}

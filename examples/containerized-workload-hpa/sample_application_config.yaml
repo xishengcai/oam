@@ -22,7 +22,7 @@ spec:
                 - type: Resource
                   resource:
                     name: cpu
-                    targetAverageUtilization: 50
+                    targetAverageUtilization: 51
                 - type: Object
                   object:
                     target:

@@ -15,7 +15,7 @@ spec:
             value: dddddaaaaaa
             subPath: true
           - path: /opt/abc.log
-            value: xxx
+            value: xxxxj
             subPath: true
           - path: /etc/nginx/conf.d/abc.log
             value: abc

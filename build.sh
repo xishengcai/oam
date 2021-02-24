@@ -2,7 +2,7 @@
 
 export GOPROXY=https://goproxy.cn
 
-BIN_FILE="lsh-mcp-lcs-timer"
+BIN_FILE="oam"
 
 while [ $# -gt 0 ]
 do
@@ -16,6 +16,10 @@ do
             export VERSION=$2
             shift
         ;;
+        --repo)
+            export IMAGE_REPO=$2
+            shift
+        ;;
         *)
             echo "unknown option [$key]"
             exit 1
@@ -25,36 +29,36 @@ do
 done
 
 if [ -z "$IMAGE_NAME" ]; then
-  IMAGE_NAME='lsh-mcp-lcs-timer'
+  IMAGE_NAME='oam'
 fi
 
 if [ -z "$VERSION" ]; then
   VERSION='dev'
 fi
 
+if [ -z "$IMAGE_REPO" ]; then
+  IMAGE_REPO='registry.cn-beijing.aliyuncs.com/xlauncher-dev'
+fi
+
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build   -o  ./bin/${BIN_FILE} ./main.go
 
 if [ $? -ne 0 ]; then
-    echo "build ERROR"
+    echo "compile ERROR"
     exit 1
 fi
 echo build success
 
 cat <<EOF > Dockerfile
 FROM registry.cn-hangzhou.aliyuncs.com/launcher/alpine:latest
-
-MAINTAINER xishengcai <cc710917049@163.com>
-
-COPY ./bin/${BIN_FILE} /usr/local/bin
-COPY ./yaml /opt/yaml
-
-RUN chmod +x /usr/local/bin/${BIN_FILE}
-
-WORKDIR /opt
-
-CMD ["${BIN_FILE}"]
+COPY ./bin/${BIN_FILE} /
+WORKDIR /
+ENTRYPOINT ["/${BIN_FILE}"]
 EOF
-#
-docker build -t registry.cn-beijing.aliyuncs.com/xlauncher-dev/${IMAGE_NAME}:${VERSION} ./
-docker push    registry.cn-beijing.aliyuncs.com/xlauncher-dev/${IMAGE_NAME}:${VERSION}
-docker rmi     registry.cn-beijing.aliyuncs.com/xlauncher-dev/${IMAGE_NAME}:${VERSION}
+
+if [ $? -ne 0 ]; then
+    echo "build image ERROR"
+    exit 1
+fi
+docker build -t ${IMAGE_REPO}/${IMAGE_NAME}:${VERSION} ./
+docker push    ${IMAGE_REPO}/${IMAGE_NAME}:${VERSION}
+docker rmi     ${IMAGE_REPO}/${IMAGE_NAME}:${VERSION}
