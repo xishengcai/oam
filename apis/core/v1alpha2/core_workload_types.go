@@ -188,7 +188,7 @@ type ContainerConfigFile struct {
 	Path string `json:"path"`
 
 	// Value that should be written to the configuration file.
-	Value *string `json:"value,omitempty"`
+	Value *string `json:"value"`
 
 	// FromSecret is a secret key reference which can be used to assign a value
 	// to be written to the configuration file at the given path in the
