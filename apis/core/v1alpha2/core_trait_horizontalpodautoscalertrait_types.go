@@ -25,10 +25,10 @@ import (
 
 var _ oam.Trait = &HorizontalPodAutoscalerTrait{}
 
+// HorizontalPodAutoscalerTrait
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:categories={crossplane,oam}
 // +kubebuilder:subresource:status
-// HorizontalPodAutoscalerTrait is the Schema for the horizontalpodautoscalertraits API
 type HorizontalPodAutoscalerTrait struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

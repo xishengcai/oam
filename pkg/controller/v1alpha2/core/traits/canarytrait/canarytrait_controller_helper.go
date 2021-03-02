@@ -2,6 +2,7 @@ package canarytrait
 
 import (
 	"context"
+
 	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 	networkingv1alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"

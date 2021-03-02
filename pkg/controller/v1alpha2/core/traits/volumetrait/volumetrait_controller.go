@@ -4,16 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/xishengcai/oam/pkg/controller"
-	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
-	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/client-go/kubernetes"
-	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 	"strings"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
@@ -22,12 +12,24 @@ import (
 	cpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/xishengcai/oam/pkg/controller"
+	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
+
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
+	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam/util"
@@ -251,11 +253,13 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		var pvcNameList []string
 		for _, pvc := range pvcList {
 			pvcTemp, err := r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
-				if err != nil {
-					mLog.Info("create pvc failed", "pvcName", pvc.Name)
-					continue
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
+					if err != nil {
+						mLog.Error(err, "Create pvc failed", "pvcName", pvc.Name)
+						return util.ReconcileWaitResult, err
+					}
 				}
 			}
 			r.record.Event(appConfig, event.Normal("PVC created",
@@ -275,13 +279,13 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		// merge patch to modify the resource
 		if err := r.Patch(ctx, res, resPatch, client.FieldOwner(volumeTrait.GetUID())); err != nil {
 			mLog.Error(err, "Failed to mount volume a resource")
-			return util.ReconcileWaitResult,
-				util.PatchCondition(ctx, r, volumeTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errMountVolume)))
+			return util.ReconcileWaitResult, err
 		}
 
 		if err := r.cleanupResources(ctx, volumeTrait, pvcNameList); err != nil {
 			mLog.Error(err, "Failed to clean up resources")
 			r.record.Event(appConfig, event.Warning(errApplyPVC, err))
+			return util.ReconcileWaitResult, err
 		}
 		mLog.Info("Successfully patch a resource", "resource GVK", res.GroupVersionKind().String(),
 			"res UID", res.GetUID(), "target volumeClaimTemplates", volumeTrait.Spec.VolumeList)
