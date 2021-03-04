@@ -44,6 +44,8 @@ import (
 	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
+
+	"github.com/oam-dev/kubevela/pkg/utils/apply"
 )
 
 const (
@@ -182,6 +184,7 @@ func WithApplyOnceOnly(applyOnceOnly bool) ReconcilerOption {
 // NewReconciler returns an OAMApplicationReconciler that reconciles ApplicationConfigurations
 // by rendering and instantiating their Components and Traits.
 func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...ReconcilerOption) *OAMApplicationReconciler {
+	l := logging.NewNopLogger()
 	r := &OAMApplicationReconciler{
 		client: m.GetClient(),
 		scheme: m.GetScheme(),
@@ -192,18 +195,17 @@ func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...Reco
 			workload: ResourceRenderFn(renderWorkload),
 			trait:    ResourceRenderFn(renderTrait),
 		},
-		workloads: &workloads{
-			// NOTE(roywang) PatchingApplicator@v0.10.0 only use "application/merge-patch+json" type patch
-			patchingClient: resource.NewAPIPatchingApplicator(m.GetClient()),
-			updatingClient: resource.NewAPIUpdatingApplicator(m.GetClient()),
-			rawClient:      m.GetClient(),
-			dm:             dm,
-		},
+
 		gc:        GarbageCollectorFn(eligible),
-		log:       logging.NewNopLogger(),
+		log:       l,
 		record:    event.NewNopRecorder(),
 		preHooks:  make(map[string]ControllerHooks),
 		postHooks: make(map[string]ControllerHooks),
+		workloads: &workloads{
+			applicator: apply.NewAPIApplicator(m.GetClient(), l),
+			rawClient:  m.GetClient(),
+			dm:         dm,
+		},
 	}
 
 	for _, ro := range o {
@@ -232,7 +234,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	}
 	acPatch := ac.DeepCopy()
 
-	if ac.Spec.Components == nil|| len(ac.Spec.Components)==0{
+	if ac.Spec.Components == nil || len(ac.Spec.Components) == 0 {
 		return reconcile.Result{}, nil
 	}
 
@@ -294,7 +296,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	log.Debug("Successfully rendered components", "workloads", len(workloads))
 	r.record.Event(ac, event.Normal(reasonRenderComponents, "Successfully rendered components", "workloads", strconv.Itoa(len(workloads))))
 
-	applyOpts := []resource.ApplyOption{resource.MustBeControllableBy(ac.GetUID())}
+	applyOpts := []apply.ApplyOption{apply.MustBeControllableBy(ac.GetUID())}
 	if r.applyOnceOnly {
 		applyOpts = append(applyOpts, applyOnceOnly())
 	}
@@ -574,7 +576,7 @@ func (e *GenerationUnchanged) Error() string {
 		"Please ignore this error in other logic.")
 }
 
-func applyOnceOnly() resource.ApplyOption {
+func applyOnceOnly() apply.ApplyOption {
 	return func(ctx context.Context, current, desired runtime.Object) error {
 		// ApplyOption only works for update/patch operation and will be ignored
 		// if the object doesn't exist before.
