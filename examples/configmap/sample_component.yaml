@@ -7,6 +7,8 @@ spec:
     apiVersion: core.oam.dev/v1alpha2
     kind: ContainerizedWorkload
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: nginx
           image: nginx
@@ -23,3 +25,4 @@ spec:
           - path: /etc/nginx/conf.d/b.log
             value: abcdafsafsafsaf
             subPath: true
+
