@@ -18,16 +18,19 @@ package applicationconfiguration
 
 import (
 	"context"
+	"github.com/pkg/errors"
 
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/pkg/errors"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/oam-dev/kubevela/pkg/utils/apply"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
@@ -52,7 +55,7 @@ const (
 // A WorkloadApplicator creates or updates or finalizes workloads and their traits.
 type WorkloadApplicator interface {
 	// Apply a workload and its traits.
-	Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...resource.ApplyOption) error
+	Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...apply.ApplyOption) error
 
 	// Finalize implements pre-delete hooks on workloads
 	Finalize(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error
@@ -75,20 +78,17 @@ func (fn WorkloadApplyFns) Finalize(ctx context.Context, ac *v1alpha2.Applicatio
 }
 
 type workloads struct {
-	// use patching-apply for creating/updating Workload
-	patchingClient resource.Applicator
-	// use updateing-apply for creating/updating Trait
-	updatingClient resource.Applicator
-	rawClient      client.Client
-	dm             discoverymapper.DiscoveryMapper
+	applicator apply.Applicator
+	rawClient  client.Client
+	dm         discoverymapper.DiscoveryMapper
 }
 
-func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...resource.ApplyOption) error {
+func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...apply.ApplyOption) error {
 	// they are all in the same namespace
 	var namespace = w[0].Workload.GetNamespace()
 	for _, wl := range w {
 		if !wl.HasDep {
-			err := a.patchingClient.Apply(ctx, wl.Workload, ao...)
+			err := a.applicator.Apply(ctx, wl.Workload, ao...)
 			if err != nil {
 				if _, ok := err.(*GenerationUnchanged); !ok {
 					// GenerationUnchanged only aborts applying current workload
@@ -102,7 +102,7 @@ func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus,
 				continue
 			}
 			t := trait.Object
-			if err := a.updatingClient.Apply(ctx, &trait.Object, ao...); err != nil {
+			if err := a.applicator.Apply(ctx, &trait.Object, ao...); err != nil {
 				if _, ok := err.(*GenerationUnchanged); !ok {
 					// GenerationUnchanged only aborts applying current trait
 					// but not blocks the whole reconciliation through returning an error
@@ -174,7 +174,7 @@ func (a *workloads) dereferenceAllScopes(ctx context.Context, namespace string, 
 }
 
 func findDereferencedScopes(statusScopes []v1alpha2.WorkloadScope, scopes []unstructured.Unstructured) []v1alpha2.WorkloadScope {
-	toBeDeferenced := []v1alpha2.WorkloadScope{}
+	var toBeDeferenced []v1alpha2.WorkloadScope
 	for _, ss := range statusScopes {
 		found := false
 		for _, s := range scopes {

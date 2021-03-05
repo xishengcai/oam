@@ -198,12 +198,15 @@ func (r *components) renderComponent(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+
 	if existingWorkload.Object == nil {
 		if volumeTraitExit {
 			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
 		} else {
 			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindDeployment})
 		}
+	}else{
+		util.AddLabels(w,existingWorkload.GetLabels())
 	}
 
 	if err := SetWorkloadInstanceName(traitDefs, w, c, existingWorkload); err != nil {
