@@ -1,0 +1,22 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: two-container
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+        - name: nginx
+          image: nginx
+          ports:
+            - containerPort: 80
+              name:  nginx
+        - name: redis
+          image: redis
+          ports:
+            - containerPort: 6379
+              name: redis
