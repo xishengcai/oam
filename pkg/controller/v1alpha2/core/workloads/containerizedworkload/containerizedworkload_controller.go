@@ -266,7 +266,3 @@ func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.Co
 	}
 
 }
-
-func getChildResourceKind(kind string) {
-
-}
