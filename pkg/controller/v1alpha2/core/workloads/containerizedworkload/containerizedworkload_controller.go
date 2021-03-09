@@ -123,7 +123,8 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyChildResource)))
 	}
 	var uid types.UID
-	switch workload.Labels[util.LabelKeyChildResource] {
+	childWorkloadKindString := workload.Labels[util.LabelKeyChildResource]
+	switch childWorkloadKindString {
 	case util.KindDeployment:
 		uid = childObject.(*appsv1.Deployment).UID
 	case util.KindStatefulSet:
@@ -141,7 +142,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		fmt.Sprintf("Workload `%s` successfully server side patched a childResource", workload.Name)))
 
 	// garbage collect the deployment that we created but not needed
-	if err := r.cleanupResources(ctx, &workload, util.KindDeployment, uid); err != nil {
+	if err := r.cleanupResources(ctx, &workload, childWorkloadKindString, uid); err != nil {
 		log.Error(err, "Failed to clean up resources")
 		r.record.Event(eventObj, event.Warning(errApplyChildResource, err))
 	}
