@@ -12,9 +12,6 @@ spec:
       containers:
         - name: nginx
           image: nginx
-          ports:
-            - containerPort: 80
-              name:  nginx
         - name: redis
           image: redis
           ports:

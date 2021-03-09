@@ -14,6 +14,7 @@ require (
 	github.com/onsi/ginkgo v1.13.0
 	github.com/onsi/gomega v1.10.3
 	github.com/pkg/errors v0.9.1
+	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.15.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	istio.io/api v0.0.0-20201123152548-197f11e4ea09
@@ -32,6 +33,6 @@ require (
 )
 
 replace (
-    k8s.io/client-go => k8s.io/client-go v0.18.8
-    github.com/crossplane/crossplane-runtime => github.com/crossplane/crossplane-runtime v0.11.0
+	github.com/crossplane/crossplane-runtime => github.com/crossplane/crossplane-runtime v0.11.0
+	k8s.io/client-go => k8s.io/client-go v0.18.8
 )

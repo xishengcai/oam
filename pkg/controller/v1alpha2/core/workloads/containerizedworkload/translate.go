@@ -306,17 +306,11 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 	var containers []corev1.Container
 	d, ok := obj.(*appsv1.Deployment)
 	if ok {
-		if len(d.Spec.Template.Spec.Containers) == 0 || len(d.Spec.Template.Spec.Containers[0].Ports) == 0 {
-			return nil, nil
-		}
 		containers = d.Spec.Template.Spec.Containers
 	}
 
 	s, ok := obj.(*appsv1.StatefulSet)
 	if ok {
-		if len(s.Spec.Template.Spec.Containers) == 0 || len(s.Spec.Template.Spec.Containers[0].Ports) == 0 {
-			return nil, nil
-		}
 		containers = s.Spec.Template.Spec.Containers
 	}
 
