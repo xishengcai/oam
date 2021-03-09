@@ -183,7 +183,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		oldVolumes := getVolumesFromSpec(spec)
 
 		var volumes []v1.Volume                 // 重新构建 volumes
-		var pvcList []*v1.PersistentVolumeClaim // 重新构建pvc
+		var pvcList []*v1.PersistentVolumeClaim // 重新构建 pvc
 
 		// volume 是列表， 因为可能有多个容器
 		// 从 sts or deploy中找出容器
@@ -294,6 +294,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 
 	volumeTrait.Status.Resources = statusResources
 	if err := r.Status().Update(ctx, volumeTrait); err != nil {
+		mLog.Error(err, "failed to update volumeTrait")
 		return util.ReconcileWaitResult, err
 	}
 
