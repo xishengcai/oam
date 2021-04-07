@@ -12,6 +12,9 @@ spec:
       containers:
         - name: nginx
           image: nginx
+#          command:
+#            - sleep
+#            - '1000'
         - name: redis
           image: redis
           ports:
