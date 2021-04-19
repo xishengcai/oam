@@ -133,7 +133,7 @@ func FetchWorkload(ctx context.Context, c client.Client, mLog logr.Logger, oamTr
 	workload.SetAPIVersion(workloadRef.APIVersion)
 	workload.SetKind(workloadRef.Kind)
 	wn := client.ObjectKey{Name: workloadRef.Name, Namespace: oamTrait.GetNamespace()}
-	if err := c.Get(ctx, wn, &workload); err != nil {
+	if err := c.Get(ctx, wn, &workload); err != nil && !apierrors.IsNotFound(err) {
 		mLog.Error(err, "Workload not find", "kind", workloadRef.Kind, "workload name", workloadRef.Name)
 		return nil, err
 	}
