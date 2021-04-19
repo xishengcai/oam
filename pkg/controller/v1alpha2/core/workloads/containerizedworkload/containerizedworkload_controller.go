@@ -18,6 +18,7 @@ package containerizedworkload
 import (
 	"context"
 	"fmt"
+	"github.com/oam-dev/kubevela/pkg/utils/apply"
 	"reflect"
 	"strings"
 
@@ -60,6 +61,7 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 		log:    ctrl.Log.WithName("ContainerizedWorkload"),
 		record: event.NewAPIRecorder(mgr.GetEventRecorderFor("ContainerizedWorkload")),
 		Scheme: mgr.GetScheme(),
+		applicator: apply.NewAPIApplicator(mgr.GetClient(), log),
 	}
 	return r.SetupWithManager(mgr)
 }
@@ -70,6 +72,7 @@ type Reconciler struct {
 	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
+	applicator apply.Applicator
 }
 
 // Reconcile reconciles a ContainerizedWorkload object
@@ -113,10 +116,9 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	r.checkLabelSelect(ctx, &workload, childObject)
 	//r.childResource = childResourceValue
 	workload.Status.Resources = nil
-	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(workload.GetUID())}
-
 	//server side apply, only the fields we set are touched
-	if err := r.Patch(ctx, childObject, client.Apply, applyOpts...); err != nil {
+	applyOpts := []apply.ApplyOption{apply.MustBeControllableBy(workload.GetUID())}
+	if err := r.applicator.Apply(ctx, childObject, applyOpts...); err != nil {
 		log.Error(err, "Failed to apply to a deployment")
 		r.record.Event(eventObj, event.Warning(errApplyChildResource, err))
 		return util.ReconcileWaitResult,
@@ -187,7 +189,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// PointToGrayName is gray workload
 	if service != nil {
 		// server side apply the service
-		if err := r.Patch(ctx, service, client.Apply, applyOpts...); err != nil {
+		if err :=  r.applicator.Apply(ctx, service, applyOpts...); err != nil {
 			log.Error(err, "Failed to apply a service")
 			r.record.Event(eventObj, event.Warning(errApplyService, err))
 			return util.ReconcileWaitResult,
