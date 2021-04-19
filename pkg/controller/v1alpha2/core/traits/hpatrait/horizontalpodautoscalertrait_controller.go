@@ -3,7 +3,6 @@ package hpatrait
 import (
 	"context"
 	"fmt"
-	"github.com/oam-dev/kubevela/pkg/utils/apply"
 	"strings"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
@@ -44,7 +43,6 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("hpaTrait")),
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
-		applicator: apply.NewAPIApplicator(mgr.GetClient(), log),
 	}
 	return r.SetupWithManager(mgr)
 }
@@ -57,7 +55,6 @@ type Reconciler struct {
 	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
-	applicator apply.Applicator
 }
 
 //SetupWithManager to setup k8s controller.
@@ -131,8 +128,8 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// server side apply HPAs
 	for _, hpa := range hpas {
-		applyOpts := []apply.ApplyOption{apply.MustBeControllableBy(hpaTrait.GetUID())}
-		if err := r.applicator.Apply(ctx, hpa, applyOpts...); err != nil {
+		applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(hpa.Name)}
+		if err := r.Patch(ctx, hpa, client.Apply, applyOpts...); err != nil {
 			r.log.Error(err, "Failed to apply a HPA", "Target HPA spec", hpa, "Total HPA count", len(hpas))
 			return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyHPA)))
 		}

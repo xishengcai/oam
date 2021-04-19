@@ -18,7 +18,6 @@ package manualscalertrait
 import (
 	"context"
 	"fmt"
-	"github.com/oam-dev/kubevela/pkg/utils/apply"
 	"strings"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
@@ -64,7 +63,6 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 		log:             ctrl.Log.WithName("ManualScalarTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("ManualScalarTrait")),
 		Scheme:          mgr.GetScheme(),
-		applicator: apply.NewAPIApplicator(mgr.GetClient(), log),
 	}
 	return r.SetupWithManager(mgr)
 }
@@ -77,7 +75,6 @@ type Reconciler struct {
 	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
-	applicator apply.Applicator
 }
 
 // Reconcile to reconcile manual trait.
@@ -168,6 +165,7 @@ func (r *Reconciler) scaleResources(ctx context.Context, mLog logr.Logger,
 	for _, res := range resources {
 		if locateReplicaField(document, res) {
 			found = true
+			resPatch := client.MergeFrom(res.DeepCopyObject())
 			mLog.Info("Get the resource the trait is going to modify",
 				"resource name", res.GetName(), "UID", res.GetUID())
 			cpmeta.AddOwnerReference(res, ownerRef)
@@ -178,7 +176,7 @@ func (r *Reconciler) scaleResources(ctx context.Context, mLog logr.Logger,
 					util.PatchCondition(ctx, r, &manualScalar, cpv1alpha1.ReconcileError(errors.Wrap(err, errPatchTobeScaledResource)))
 			}
 			// merge patch to scale the resource
-			if err := r.applicator.Apply(ctx, res); err != nil {
+			if err := r.Patch(ctx, res, resPatch, client.FieldOwner(manualScalar.GetUID())); err != nil {
 				mLog.Error(err, "Failed to scale a resource")
 				return util.ReconcileWaitResult,
 					util.PatchCondition(ctx, r, &manualScalar, cpv1alpha1.ReconcileError(errors.Wrap(err, errScaleResource)))
