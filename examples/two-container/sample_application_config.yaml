@@ -1,0 +1,8 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: two-container
+spec:
+  components:
+    - componentName: two-container
+
