@@ -50,6 +50,5 @@ e2e/junit.xml
 
 node_modules/
 package-lock.json
-e2e_test_back/
 
 
