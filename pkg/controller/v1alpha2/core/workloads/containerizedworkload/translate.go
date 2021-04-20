@@ -87,6 +87,7 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 			Image:   container.Image,
 			Command: container.Command,
 			Args:    container.Arguments,
+			ImagePullPolicy: corev1.PullAlways,
 		}
 
 		if container.Resources != nil {

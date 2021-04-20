@@ -1,0 +1,38 @@
+# http://frontend.lstack-inner.com/guidelines/convention/commit-message.html
+# 以下是遵循 LStack 前端团队提交规范的 Message 模板：
+# <type>(<scope>): <subject>
+# <blank-line>
+# <body>
+# <blank-line>
+# <footer>
+#
+# - blank-line: 空一行。
+# - type: 必填，为 [build,ci,feat,fix,st,sit,style,test,docs,revert,version,pref,refactor] 之一。
+#         1、其中 [build,ci] 为限定类别，涉及 ci 及构建相关的变动，必须使用对应类别，且本次提交必须不涉及其他类别。
+#         2、此外 [feat,fix] 为主类别，除限定类别外，当一次提交涉及主类别与其他多种类别时，取主类别。
+#         3、在非主类别中 [st,sit,style,test,docs,revert,version] 具有排他性，必须独立提交。
+#         4、其余类别中，当涉及多种类别时，选取优先级 pref > refactor。
+# - scope: 1、当 type 不为 'revert' 时必填，其值为提交涉及模块的 package.json 中的名称，根项目值为 'root'。
+#          2、当 type 为 'revert' 时其值必须为空。
+#          3、单次提交只能涉及单模块的文件变动，涉及多模块文件必须分多次提交。
+# - subject: 必填，对本次提交做简要描述。
+#            1、现在时动词 action 加一个空格起头，语言请选择使用中文，结尾无需标点。
+#            2、当 type 为 'revert'时，subject 值必须为被回滚的提交 message 的完整 header。
+#            3、action 的值必须为 [添加,完善,修复,解决,删除,禁用,修改,调整,优化,重构,发布,合并] 之一。
+#            4、当 type 为 'feat' 时，action 必须为'添加'。
+#            5、当 type 为 'version' 时，action 必须为'发布'，反之亦然。
+#            6、当 type 为 'pref' 时，action 必须为'优化'。
+#            7、当 type 为 'style' 时，action 必须为'调整'。
+#            8、当 type 为 [fix,st,sit] 之一时，action 必须为'修复'，反之亦然。
+# - body: 选填，本次提交的详细描述，介绍本次修改的必要性，解决了啥问题以及带来的影响。
+#         1、如果 type 为 'revert'，首行为 'This reverts commit <hash>.'。
+# - footer: 如果本次提交涉及不兼容的变更或是处理了 issue 亦或是解决了 tapd 单子，则必填。具体如下：
+#           1、涉及不兼容的变更，footer 以 'BREAKING CHANGE:' 加一个空格或两个换行符起头，需要对变动的内容以及变动的理由和迁移方法进行详细描述。
+#           2、如果处理了 issue，以 'Closes' 加一个空格起头，带上 issue 编号，包含多个 issues 则以 ',' 加空格分隔。如：'Closes #123, #124'。
+#           3、如果处理了 tapd 缺陷单子，以 'Closes' 加一个空格起头，带上单子 ID，一个单子必须对应一次提交。如：'Closes #1001899'。
+# - 注意:
+#       1、如果本次提交包含不兼容的变更，需要在类型/作用域前缀之后，':' 之前，附加 '!'字符，以进一步提醒注意破坏性变更。如：'fix(lcs)!: 这是 subject'。
+#       2、如果 type 为 'revert'，那么 header 以 'revert:' 开头，紧跟着是被回滚提交 message 的 header 信息，同时在正文中添加
+#          `'This reverts commit <hash>.' 及其他正文信息，其中 hash 值表示被回滚前的提交。
+#       3、Message 中任何一行都不能超过 72 个字符，当 type 为 'revert' 时，header 长度不超过 81。
+
