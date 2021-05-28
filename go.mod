@@ -7,9 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.1.0
-	github.com/go-logr/zapr v0.1.1 // indirect
 	github.com/google/go-cmp v0.5.2
-	github.com/kr/pretty v0.2.0 // indirect
 	github.com/oam-dev/kubevela v0.3.4
 	github.com/onsi/ginkgo v1.13.0
 	github.com/onsi/gomega v1.10.3
