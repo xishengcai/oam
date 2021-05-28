@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/oam-dev/kubevela/pkg/utils/apply"
 	"strings"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
@@ -58,7 +57,6 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeTrait")),
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
-		applicator: apply.NewAPIApplicator(mgr.GetClient(), log),
 	}
 	return r.SetupWithManager(mgr, log)
 
@@ -73,7 +71,6 @@ type Reconcile struct {
 	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
-	applicator apply.Applicator
 }
 
 //SetupWithManager to setup k8s controller.
@@ -180,6 +177,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		if res.GetKind() != util.KindStatefulSet && res.GetKind() != util.KindDeployment {
 			continue
 		}
+		resPatch := client.MergeFrom(res.DeepCopyObject())
 		cpmeta.AddOwnerReference(res, ownerRef)
 		spec, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec")
 		oldVolumes := getVolumesFromSpec(spec)
@@ -191,7 +189,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		// 从 sts or deploy中找出容器
 		containers, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec", "containers")
 
-		applyOpts := []apply.ApplyOption{apply.MustBeControllableBy(volumeTrait.GetUID())}
 		// 遍历挂载特性中的VolumeList字段
 		for _, item := range volumeTrait.Spec.VolumeList {
 			var volumeMounts []v1.VolumeMount
@@ -280,7 +277,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		}
 
 		// merge patch to modify the resource
-		if err := r.applicator.Apply(ctx, res, applyOpts...); err != nil {
+		if err := r.Patch(ctx, res, resPatch, client.FieldOwner(volumeTrait.GetUID())); err != nil {
 			mLog.Error(err, "Failed to mount volume a resource")
 			return util.ReconcileWaitResult, err
 		}

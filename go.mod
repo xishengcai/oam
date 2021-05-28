@@ -32,7 +32,4 @@ require (
 	sigs.k8s.io/controller-tools v0.2.4
 )
 
-replace (
-	github.com/crossplane/crossplane-runtime => github.com/crossplane/crossplane-runtime v0.11.0
-	k8s.io/client-go => k8s.io/client-go v0.18.8
-)
+replace k8s.io/client-go => k8s.io/client-go v0.18.8
