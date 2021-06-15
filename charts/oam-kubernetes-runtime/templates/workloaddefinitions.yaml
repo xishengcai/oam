@@ -12,3 +12,11 @@ spec:
       kind: Service
     - apiVersion: apps/v1
       kind: StatefulSet
+---
+apiVersion: core.oam.dev/v1alpha2
+kind: WorkloadDefinition
+metadata:
+  name: helmreleases.helm.fluxcd.io
+spec:
+  definitionRef:
+    name: helmreleases.helm.fluxcd.io
