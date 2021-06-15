@@ -85,26 +85,16 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	hpaLog.Info("Get the HPA trait", "Spec: ", hpaTrait.Spec)
-	// find the resource object to record the event to, default is the parent appConfig.
-	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &hpaTrait)
-	if eventObj == nil {
-		// fallback to workload itself
-		hpaLog.Error(err, "Failed to find the parent resource", "hpaTrait", hpaTrait.Name)
-		eventObj = &hpaTrait
-	}
 
 	// Fetch the workload instance this trait is referring to
 	workload, err := util.FetchWorkload(ctx, r, r.log, &hpaTrait)
 	if err != nil {
-		r.record.Event(eventObj, event.Warning(util.ErrLocateWorkload, err))
-		return util.ReconcileWaitResult, util.PatchCondition(
-			ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, util.ErrLocateWorkload)))
+		return util.ReconcileWaitResult, err
 	}
 
 	resources, err := util.FetchWorkloadChildResources(ctx, hpaLog, r, r.dm, workload)
 	if err != nil {
 		hpaLog.Error(err, "Error while fetching the workload child resources", "workload", workload.UnstructuredContent())
-		r.record.Event(eventObj, event.Warning(util.ErrFetchChildResources, err))
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &hpaTrait,
 			cpv1alpha1.ReconcileError(fmt.Errorf(util.ErrFetchChildResources)))
 	}
@@ -119,7 +109,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if len(hpas) == 0 {
 		r.log.Info("Cannot get any HPA-applicable resources")
-		return ctrl.Result{}, util.PatchCondition(ctx, r, &hpaTrait, cpv1alpha1.ReconcileError(fmt.Errorf(errLocateAvailableResouces)))
+		return util.ReconcileWaitResult, fmt.Errorf(errLocateAvailableResouces)
 	}
 
 	// to record UID of newly created HPAs
