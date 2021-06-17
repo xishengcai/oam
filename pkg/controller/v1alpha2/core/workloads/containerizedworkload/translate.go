@@ -410,5 +410,10 @@ func modifyLabelSelector(pointToGrayName *string, d *appsv1.Deployment) {
 func setNodeSelect(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
 	if cw.Spec.NodeSelector != nil {
 		d.Spec.Template.Spec.NodeSelector = *cw.Spec.NodeSelector
+		d.Spec.Template.Spec.Tolerations = []corev1.Toleration{
+			{Operator: corev1.TolerationOpExists},
+		}
+	}else{
+		d.Spec.Template.Spec.Tolerations = nil
 	}
 }
