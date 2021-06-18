@@ -18,7 +18,6 @@ package containerizedworkload
 import (
 	"context"
 	"fmt"
-	"github.com/oam-dev/kubevela/pkg/utils/apply"
 	"reflect"
 	"strings"
 
@@ -30,6 +29,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/go-logr/logr"
+	"github.com/oam-dev/kubevela/pkg/utils/apply"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -57,10 +57,10 @@ const (
 // Setup adds a controller that reconciles ContainerizedWorkload.
 func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 	r := Reconciler{
-		Client: mgr.GetClient(),
-		log:    ctrl.Log.WithName("ContainerizedWorkload"),
-		record: event.NewAPIRecorder(mgr.GetEventRecorderFor("ContainerizedWorkload")),
-		Scheme: mgr.GetScheme(),
+		Client:     mgr.GetClient(),
+		log:        ctrl.Log.WithName("ContainerizedWorkload"),
+		record:     event.NewAPIRecorder(mgr.GetEventRecorderFor("ContainerizedWorkload")),
+		Scheme:     mgr.GetScheme(),
 		applicator: apply.NewAPIApplicator(mgr.GetClient(), log),
 	}
 	return r.SetupWithManager(mgr)
@@ -69,9 +69,9 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 // Reconciler reconciles a ContainerizedWorkload object
 type Reconciler struct {
 	client.Client
-	log    logr.Logger
-	record event.Recorder
-	Scheme *runtime.Scheme
+	log        logr.Logger
+	record     event.Recorder
+	Scheme     *runtime.Scheme
 	applicator apply.Applicator
 }
 
@@ -189,7 +189,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// PointToGrayName is gray workload
 	if service != nil {
 		// server side apply the service
-		if err :=  r.applicator.Apply(ctx, service, applyOpts...); err != nil {
+		if err := r.applicator.Apply(ctx, service, applyOpts...); err != nil {
 			log.Error(err, "Failed to apply a service")
 			r.record.Event(eventObj, event.Warning(errApplyService, err))
 			return util.ReconcileWaitResult,

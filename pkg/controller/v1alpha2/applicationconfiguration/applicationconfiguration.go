@@ -234,7 +234,6 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	}
 	acPatch := ac.DeepCopy()
 
-
 	if ac.ObjectMeta.DeletionTimestamp.IsZero() {
 		if registerFinalizers(ac) {
 			log.Debug("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
@@ -284,7 +283,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	log = log.WithValues("uid", ac.GetUID(), "version", ac.GetResourceVersion())
 
 	workloads, depStatus, err := r.components.Render(ctx, ac)
-	if err != nil{
+	if err != nil {
 		log.Info("Cannot render components", "error", err, "requeue-after", time.Now().Add(shortWait))
 		r.record.Event(ac, event.Warning(reasonCannotRenderComponents, err))
 		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errRenderComponents)))

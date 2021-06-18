@@ -3,7 +3,6 @@ package v1alpha2
 import (
 	"github.com/xishengcai/oam/pkg/webhook/v1alpha2/applicationconfiguration"
 	"github.com/xishengcai/oam/pkg/webhook/v1alpha2/component"
-	"github.com/xishengcai/oam/pkg/webhook/v1alpha2/workload"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -19,6 +18,5 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 	component.RegisterValidatingHandler(mgr)
-	workload.RegisterMutatingHandler(mgr)
 	return nil
 }

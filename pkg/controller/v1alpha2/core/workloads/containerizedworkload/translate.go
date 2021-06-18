@@ -83,10 +83,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 			})
 		}
 		kubernetesContainer := corev1.Container{
-			Name:    container.Name,
-			Image:   container.Image,
-			Command: container.Command,
-			Args:    container.Arguments,
+			Name:            container.Name,
+			Image:           container.Image,
+			Command:         container.Command,
+			Args:            container.Arguments,
 			ImagePullPolicy: corev1.PullAlways,
 		}
 
@@ -315,10 +315,10 @@ func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*
 		containers = s.Spec.Template.Spec.Containers
 	}
 
-	for index, container := range containers{
+	for index, container := range containers {
 		for _, c := range container.Ports {
 			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
-				Name:       fmt.Sprintf("cont-%d-%s",index,c.Name),
+				Name:       fmt.Sprintf("cont-%d-%s", index, c.Name),
 				Protocol:   c.Protocol,
 				Port:       c.ContainerPort,
 				TargetPort: intstr.FromInt(int(c.ContainerPort)),
@@ -408,12 +408,12 @@ func modifyLabelSelector(pointToGrayName *string, d *appsv1.Deployment) {
 }
 
 func setNodeSelect(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
-	if cw.Spec.NodeSelector != nil && len(*cw.Spec.NodeSelector) > 0{
+	if cw.Spec.NodeSelector != nil && len(*cw.Spec.NodeSelector) > 0 {
 		d.Spec.Template.Spec.NodeSelector = *cw.Spec.NodeSelector
 		d.Spec.Template.Spec.Tolerations = []corev1.Toleration{
 			{Operator: corev1.TolerationOpExists},
 		}
-	}else{
+	} else {
 		d.Spec.Template.Spec.Tolerations = nil
 	}
 }
