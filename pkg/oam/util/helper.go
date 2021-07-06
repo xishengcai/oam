@@ -247,17 +247,16 @@ func FetchWorkloadChildResources(ctx context.Context, mLog logr.Logger, r client
 }
 
 func fetchChildResources(ctx context.Context, mLog logr.Logger, r client.Reader, workload *unstructured.Unstructured,
-	wcrl []v1alpha2.ChildResourceKind) ([]*unstructured.Unstructured, error) {
+	crkList []v1alpha2.ChildResourceKind) ([]*unstructured.Unstructured, error) {
 	var childResources []*unstructured.Unstructured
 	// list by each child resource type with namespace and possible label selector
-	for _, wcr := range wcrl {
+	for _, crk := range crkList {
 		crs := unstructured.UnstructuredList{}
-		crs.SetAPIVersion(wcr.APIVersion)
-		crs.SetKind(wcr.Kind)
-		mLog.Info("List child resource kind", "APIVersion", wcr.APIVersion, "Kind", wcr.Kind, "owner UID",
-			workload.GetUID())
+		crs.SetAPIVersion(crk.APIVersion)
+		crs.SetKind(crk.Kind)
+		mLog.V(4).Info("List child resource kind", "APIVersion", crk.APIVersion, "Kind", crk.Kind, "owner UID", workload.GetUID())
 		if err := r.List(ctx, &crs, client.InNamespace(workload.GetNamespace()),
-			client.MatchingLabels(wcr.Selector)); err != nil {
+			client.MatchingLabels(crk.Selector)); err != nil {
 			mLog.Error(err, "failed to list object", "api version", crs.GetAPIVersion(), "kind", crs.GetKind())
 			return nil, err
 		}

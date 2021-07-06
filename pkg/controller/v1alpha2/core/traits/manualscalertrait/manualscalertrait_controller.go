@@ -86,7 +86,7 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch;delete
 func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	mLog := r.log.WithValues("manualscalar trait", req.NamespacedName)
+	mLog := r.log.WithValues("namespacedName", req.NamespacedName)
 
 	mLog.Info("Reconcile manualscalar trait")
 
@@ -94,8 +94,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err := r.Get(ctx, req.NamespacedName, &manualScalar); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	r.log.Info("Get the manualscalar trait", "ReplicaCount", manualScalar.Spec.ReplicaCount,
-		"Annotations", manualScalar.GetAnnotations())
+	r.log.Info("Get the manualscalar trait", "ReplicaCount", manualScalar.Spec.ReplicaCount)
 	// find the resource object to record the event to, default is the parent appConfig.
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &manualScalar)
 	if eventObj == nil {
@@ -103,6 +102,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		mLog.Error(err, "Failed to find the parent resource", "manualScalar", manualScalar.Name)
 		eventObj = &manualScalar
 	}
+
 	// Fetch the workload instance this trait is referring to
 	workload, err := util.FetchWorkload(ctx, r, mLog, &manualScalar)
 	if err != nil {
@@ -183,6 +183,7 @@ func (r *Reconciler) scaleResources(ctx context.Context, mLog logr.Logger,
 			}
 			mLog.Info("Successfully scaled a resource", "resource GVK", res.GroupVersionKind().String(),
 				"res UID", res.GetUID(), "target replica", manualScalar.Spec.ReplicaCount)
+
 		}
 	}
 	if !found {
@@ -206,13 +207,13 @@ func locateReplicaField(document openapi.Resources, res *unstructured.Unstructur
 		return false
 	}
 	// we look up the resource schema definition by its GVK
-	schema := document.LookupResource(schema.GroupVersionKind{
+	schemaR := document.LookupResource(schema.GroupVersionKind{
 		Group:   gv.Group,
 		Version: gv.Version,
 		Kind:    res.GetKind(),
 	})
 	// we try to see if there is a spec.replicas fields in its definition
-	field, err := explain.LookupSchemaForField(schema, replicaFieldPath)
+	field, err := explain.LookupSchemaForField(schemaR, replicaFieldPath)
 	if err != nil || field == nil {
 		return false
 	}

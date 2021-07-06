@@ -39,8 +39,8 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 	r := Reconciler{
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
-		log:             ctrl.Log.WithName("hpaTrait"),
-		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("hpaTrait")),
+		log:             ctrl.Log.WithName("HpaTrait"),
+		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("HpaTrait")),
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
 	}
@@ -78,7 +78,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;
 func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	hpaLog := r.log.WithValues("hpaTrait ", req.NamespacedName)
+	hpaLog := r.log.WithValues("namespace", req.NamespacedName)
 	hpaLog.Info("Reconcile HorizontalPodAutoscalerTrait")
 
 	var hpaTrait oamv1alpha2.HorizontalPodAutoscalerTrait

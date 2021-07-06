@@ -114,7 +114,6 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderWorkload)))
 	}
 	r.checkLabelSelect(ctx, &workload, childObject)
-	//r.childResource = childResourceValue
 	workload.Status.Resources = nil
 	//server side apply, only the fields we set are touched
 	applyOpts := []apply.ApplyOption{apply.MustBeControllableBy(workload.GetUID())}
@@ -245,9 +244,9 @@ func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.Co
 			if !reflect.DeepEqual(dep.Spec.Selector.MatchLabels, emptyChild.Spec.Selector.MatchLabels) {
 				err = r.Client.Delete(ctx, emptyChild)
 				if err != nil {
-					klog.Error("failed delete deployment ", emptyChild.Name)
+					klog.Errorf("failed delete deployment %s, UID: %s", emptyChild.Name, emptyChild.UID)
 				} else {
-					klog.Info("success delete deployment ", emptyChild.Name)
+					klog.Infof("success delete deployment %s, UID: %s", emptyChild.Name, emptyChild.UID)
 				}
 			}
 		}
@@ -259,9 +258,9 @@ func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.Co
 			if !reflect.DeepEqual(sts.Spec.Selector.MatchLabels, emptyChild.Spec.Selector.MatchLabels) {
 				err = r.Client.Delete(ctx, emptyChild)
 				if err != nil {
-					klog.Error("failed delete statefulSet ", emptyChild.Name)
+					klog.Errorf("failed delete statefulSet %s, UID: %s", emptyChild.Name, emptyChild.UID)
 				} else {
-					klog.Info("success delete statefulSet ", emptyChild.Name)
+					klog.Infof("success delete statefulSet %s, UID: %s", emptyChild.Name, emptyChild.UID)
 				}
 			}
 		}

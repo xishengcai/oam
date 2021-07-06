@@ -31,8 +31,8 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 	r := Reconciler{
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
-		log:             ctrl.Log.WithName("canaryTrait"),
-		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("canaryTrait")),
+		log:             ctrl.Log.WithName("CanaryTrait"),
+		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("CanaryTrait")),
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
 		IstioClient:     istioclient.NewForConfigOrDie(mgr.GetConfig()),
@@ -68,7 +68,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;
 func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	canaryLog := r.log.WithValues("canaryTraits ", req.NamespacedName)
+	canaryLog := r.log.WithValues("namespacedName", req.NamespacedName)
 
 	canaryLog.Info("Reconcile canaryLogTrait")
 
