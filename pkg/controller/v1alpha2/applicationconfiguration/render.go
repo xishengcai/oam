@@ -205,8 +205,8 @@ func (r *components) renderComponent(ctx context.Context,
 		} else {
 			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindDeployment})
 		}
-	}else{
-		util.AddLabels(w,existingWorkload.GetLabels())
+	} else {
+		util.AddLabels(w, existingWorkload.GetLabels())
 	}
 
 	if err := SetWorkloadInstanceName(traitDefs, w, c, existingWorkload); err != nil {

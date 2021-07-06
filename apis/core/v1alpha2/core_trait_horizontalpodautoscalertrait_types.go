@@ -25,7 +25,7 @@ import (
 
 var _ oam.Trait = &HorizontalPodAutoscalerTrait{}
 
-// HorizontalPodAutoscalerTrait
+// HorizontalPodAutoscalerTrait auto scale pods by metric
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:categories={crossplane,oam}
 // +kubebuilder:subresource:status

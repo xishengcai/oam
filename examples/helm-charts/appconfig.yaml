@@ -1,0 +1,9 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: helm-example
+spec:
+  components:
+    - componentName: oam-helm
+
+

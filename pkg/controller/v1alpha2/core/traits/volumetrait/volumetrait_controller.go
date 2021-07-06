@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
@@ -39,17 +40,19 @@ import (
 const (
 	errMountVolume = "cannot scale the resource"
 	errApplyPVC    = "cannot apply the pvc"
+	waitTime       = time.Second * 60
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
 func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
+	name := "oam/" + strings.ToLower(oamv1alpha2.VolumeTraitKind)
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	clientSet := kubernetes.NewForConfigOrDie(mgr.GetConfig())
-	r := Reconcile{
+	r := &Reconcile{
 		clientSet:       clientSet,
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
@@ -58,8 +61,19 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
 	}
-	return r.SetupWithManager(mgr, log)
 
+	return ctrl.NewControllerManagedBy(mgr).
+		Named(name).
+		For(&oamv1alpha2.VolumeTrait{}).
+		Owns(&v1.PersistentVolumeClaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(&source.Kind{Type: &oamv1alpha2.VolumeTrait{}}, &VolumeHandler{
+			ClientSet:  r.clientSet,
+			Client:     mgr.GetClient(),
+			Logger:     ctrl.Log.WithName("VolumeHandler"),
+			dm:         r.dm,
+			AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
+		}).
+		Complete(r)
 }
 
 // Reconcile reconciles a VolumeTrait object
@@ -73,24 +87,6 @@ type Reconcile struct {
 	Scheme *runtime.Scheme
 }
 
-//SetupWithManager to setup k8s controller.
-func (r *Reconcile) SetupWithManager(mgr ctrl.Manager, log logging.Logger) error {
-	name := "oam/" + strings.ToLower(oamv1alpha2.VolumeTraitKind)
-
-	return ctrl.NewControllerManagedBy(mgr).
-		Named(name).
-		For(&oamv1alpha2.VolumeTrait{}).
-		Owns(&v1.PersistentVolumeClaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &oamv1alpha2.VolumeTrait{}}, &VolumeHandler{
-			ClientSet:  r.clientSet,
-			Client:     mgr.GetClient(),
-			Logger:     r.log.WithValues("volume trait delete", "..."),
-			dm:         r.dm,
-			AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
-		}).
-		Complete(r)
-}
-
 // Reconcile to reconcile volume trait.
 // +kubebuilder:rbac:groups=core.oam.dev,resources=volumetraits,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core.oam.dev,resources=volumetraits/status,verbs=get;update;patch
@@ -102,7 +98,7 @@ func (r *Reconcile) SetupWithManager(mgr ctrl.Manager, log logging.Logger) error
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	mLog := r.log.WithValues("volume trait", req.NamespacedName)
+	mLog := r.log.WithValues("namespacedName", req.NamespacedName)
 
 	mLog.Info("Reconcile volume trait")
 
@@ -127,6 +123,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			ctx, r, &volumeTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, util.ErrLocateWorkload)))
 	}
 
+	mLog.V(4).Info("workload-name", workload.GetName(), "workload-uid", workload.GetUID())
 	// Fetch the child resources list from the corresponding workload
 	resources, err := util.FetchWorkloadChildResources(ctx, mLog, r, r.dm, workload)
 	if err != nil {
@@ -135,7 +132,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &volumeTrait,
 			cpv1alpha1.ReconcileError(fmt.Errorf(util.ErrFetchChildResources)))
 	}
-	// Scale the child resources that we know how to scale
 	result, err := r.mountVolume(ctx, mLog, &volumeTrait, resources)
 	if err != nil {
 		r.record.Event(eventObj, event.Warning(errMountVolume, err))
@@ -146,7 +142,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		fmt.Sprintf("Trait `%s` successfully mount volume  to %v ",
 			volumeTrait.Name, volumeTrait.Spec.VolumeList)))
 
-	return ctrl.Result{}, util.PatchCondition(ctx, r, &volumeTrait, cpv1alpha1.ReconcileSuccess())
+	return ctrl.Result{RequeueAfter: waitTime}, util.PatchCondition(ctx, r, &volumeTrait, cpv1alpha1.ReconcileSuccess())
 }
 
 // identify child resources and add volume
@@ -293,7 +289,8 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 	}
 
 	volumeTrait.Status.Resources = statusResources
-	if err := r.Status().Update(ctx, volumeTrait); err != nil {
+	volumeTraitPatch := client.MergeFrom(volumeTrait.DeepCopyObject())
+	if err := r.Status().Patch(ctx, volumeTrait, volumeTraitPatch); err != nil {
 		mLog.Error(err, "failed to update volumeTrait")
 		return util.ReconcileWaitResult, err
 	}
