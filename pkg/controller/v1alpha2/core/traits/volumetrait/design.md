@@ -67,7 +67,7 @@ type PathItem struct {
 
 ### 支持 storage class update
 1. get pvc
-2. 比较pvc. storageclass
+2. 比较pvc. storage class
    no delete old
    create new pvc
    

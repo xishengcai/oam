@@ -18,13 +18,12 @@ package applicationconfiguration
 
 import (
 	"context"
+
 	"github.com/pkg/errors"
 
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -59,22 +58,6 @@ type WorkloadApplicator interface {
 
 	// Finalize implements pre-delete hooks on workloads
 	Finalize(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error
-}
-
-// A WorkloadApplyFns creates or updates or finalizes workloads and their traits.
-type WorkloadApplyFns struct {
-	ApplyFn    func(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...resource.ApplyOption) error
-	FinalizeFn func(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error
-}
-
-// Apply a workload and its traits.
-func (fn WorkloadApplyFns) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...resource.ApplyOption) error {
-	return fn.ApplyFn(ctx, status, w, ao...)
-}
-
-// Finalize workloads and its traits/scopes.
-func (fn WorkloadApplyFns) Finalize(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error {
-	return fn.FinalizeFn(ctx, ac)
 }
 
 type workloads struct {

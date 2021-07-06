@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/pkg/oam/util"
 	"k8s.io/api/autoscaling/v2beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,11 +33,8 @@ var (
 	groupVersionHPA = v2beta1.SchemeGroupVersion.String()
 )
 
-func (r *Reconciler) renderHPA(trait oam.Trait, resources []*unstructured.Unstructured) ([]*v2beta1.HorizontalPodAutoscaler, error) {
-	t, ok := trait.(*oamv1alpha2.HorizontalPodAutoscalerTrait)
-	if !ok {
-		return nil, errors.New("not a hpa trait")
-	}
+// renderHPA render hpaTrait to kubernetes resource hpa
+func (r *Reconciler) renderHPA(t *oamv1alpha2.HorizontalPodAutoscalerTrait, resources []*unstructured.Unstructured) ([]*v2beta1.HorizontalPodAutoscaler, error) {
 	hpas := make([]*v2beta1.HorizontalPodAutoscaler, 0)
 	for _, res := range resources {
 		scaleTargetRef, isValidResource, err := renderReference(res)
@@ -67,7 +63,7 @@ func (r *Reconciler) renderHPA(trait oam.Trait, resources []*unstructured.Unstru
 				Metrics:        t.Spec.Metrics,
 			},
 		}
-		if err := ctrl.SetControllerReference(trait, hpa, r.Scheme); err != nil {
+		if err := ctrl.SetControllerReference(t, hpa, r.Scheme); err != nil {
 			return nil, err
 		}
 		hpas = append(hpas, hpa)

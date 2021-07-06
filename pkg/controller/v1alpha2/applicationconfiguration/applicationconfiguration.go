@@ -52,7 +52,6 @@ const (
 	reconcileTimeout = 1 * time.Minute
 	dependCheckWait  = 10 * time.Second
 	shortWait        = 30 * time.Second
-	longWait         = 1 * time.Minute
 )
 
 // Reconcile error strings.
@@ -101,7 +100,8 @@ func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
 		Complete(NewReconciler(mgr, dm,
 			WithLogger(l.WithValues("controller", name)),
 			WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-			WithApplyOnceOnly(args.ApplyOnceOnly)))
+			WithApplyOnceOnly(args.ApplyOnceOnly),
+			WithSetSync(args.SyncTime)))
 }
 
 // An OAMApplicationReconciler reconciles OAM ApplicationConfigurations by rendering and
@@ -117,33 +117,11 @@ type OAMApplicationReconciler struct {
 	preHooks      map[string]ControllerHooks
 	postHooks     map[string]ControllerHooks
 	applyOnceOnly bool
+	syncTime      time.Duration
 }
 
 // A ReconcilerOption configures a Reconciler.
 type ReconcilerOption func(*OAMApplicationReconciler)
-
-// WithRenderer specifies how the Reconciler should render workloads and traits.
-func WithRenderer(r ComponentRenderer) ReconcilerOption {
-	return func(rc *OAMApplicationReconciler) {
-		rc.components = r
-	}
-}
-
-// WithApplicator specifies how the Reconciler should apply workloads and traits.
-func WithApplicator(a WorkloadApplicator) ReconcilerOption {
-	return func(rc *OAMApplicationReconciler) {
-		rc.workloads = a
-	}
-}
-
-// WithGarbageCollector specifies how the Reconciler should garbage collect
-// workloads and traits when an ApplicationConfiguration is edited to remove
-// them.
-func WithGarbageCollector(gc GarbageCollector) ReconcilerOption {
-	return func(rc *OAMApplicationReconciler) {
-		rc.gc = gc
-	}
-}
 
 // WithLogger specifies how the Reconciler should log messages.
 func WithLogger(l logging.Logger) ReconcilerOption {
@@ -178,6 +156,13 @@ func WithPosthook(name string, hook ControllerHooks) ReconcilerOption {
 func WithApplyOnceOnly(applyOnceOnly bool) ReconcilerOption {
 	return func(r *OAMApplicationReconciler) {
 		r.applyOnceOnly = applyOnceOnly
+	}
+}
+
+// WithSetSync set Reconciler exec interval
+func WithSetSync(syncTime time.Duration) ReconcilerOption {
+	return func(r *OAMApplicationReconciler) {
+		r.syncTime = syncTime
 	}
 }
 
@@ -234,7 +219,6 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	}
 	acPatch := ac.DeepCopy()
 
-
 	if ac.ObjectMeta.DeletionTimestamp.IsZero() {
 		if registerFinalizers(ac) {
 			log.Debug("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
@@ -273,7 +257,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	for name, hook := range r.preHooks {
 		result, err := hook.Exec(ctx, ac, log)
 		if err != nil {
-			log.Debug("Failed to execute pre-hooks", "hook name", name, "error", err, "requeue-after", result.RequeueAfter)
+			log.Debug("Failed to execute pre-hooks", "hook name", name, "error", err)
 			r.record.Event(ac, event.Warning(reasonCannotExecutePrehooks, err))
 			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePrehooks)))
 			return result, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
@@ -284,7 +268,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	log = log.WithValues("uid", ac.GetUID(), "version", ac.GetResourceVersion())
 
 	workloads, depStatus, err := r.components.Render(ctx, ac)
-	if err != nil{
+	if err != nil {
 		log.Info("Cannot render components", "error", err, "requeue-after", time.Now().Add(shortWait))
 		r.record.Event(ac, event.Warning(reasonCannotRenderComponents, err))
 		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errRenderComponents)))
@@ -331,14 +315,13 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	r.updateStatus(ctx, ac, acPatch, workloads)
 
 	ac.Status.Dependency = v1alpha2.DependencyStatus{}
-	waitTime := longWait
 	if len(depStatus.Unsatisfied) != 0 {
-		waitTime = dependCheckWait
+		r.syncTime = dependCheckWait
 		ac.Status.Dependency = *depStatus
 	}
 
-	// the posthook function will do the final status update
-	return reconcile.Result{RequeueAfter: waitTime}, nil
+	// the post hook function will do the final status update
+	return reconcile.Result{RequeueAfter: r.syncTime}, nil
 }
 
 func (r *OAMApplicationReconciler) updateStatus(ctx context.Context, ac, acPatch *v1alpha2.ApplicationConfiguration, workloads []Workload) {

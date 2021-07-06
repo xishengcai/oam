@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"go.uber.org/zap/zapcore"
@@ -37,8 +38,10 @@ func main() {
 	var certDir string
 	var webhookPort int
 	var useWebhook bool
+	var debugLogs bool
 	var controllerArgs controller.Args
 
+	flag.BoolVar(&debugLogs, "debug", false, "Enable the debug logs useful for development")
 	flag.BoolVar(&useWebhook, "use-webhook", false, "Enable Admission Webhook")
 	flag.StringVar(&certDir, "webhook-cert-dir", "/k8s-webhook-server/serving-certs", "Admission webhook cert/key dir.")
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "admission webhook listen address")
@@ -54,6 +57,7 @@ func main() {
 		"RevisionLimit is the maximum number of revisions that will be maintained. The default value is 50.")
 	flag.BoolVar(&controllerArgs.ApplyOnceOnly, "apply-once-only", false,
 		"For the purpose of some production environment that workload or trait should not be affected if no spec change")
+	flag.DurationVar(&controllerArgs.SyncTime, "sync-time", 60*time.Second, "Set Reconcile exec interval,unit is second")
 	flag.Parse()
 
 	// setup logging
@@ -69,7 +73,7 @@ func main() {
 	}
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
-		o.Development = true
+		o.Development = debugLogs
 		o.DestWritter = w
 	}))
 
@@ -102,9 +106,6 @@ func main() {
 		os.Exit(1)
 	}
 	oamLog.Info("starting the controller manager")
-	if controllerArgs.ApplyOnceOnly {
-		oamLog.Info("applyOnceOnly is enabled that means workload or trait only apply once if no spec change even they are changed by others")
-	}
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		oamLog.Error(err, "problem running manager")
 		os.Exit(1)
