@@ -411,7 +411,10 @@ func setNodeSelect(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
 	if cw.Spec.NodeSelector != nil && len(*cw.Spec.NodeSelector) > 0 {
 		d.Spec.Template.Spec.NodeSelector = *cw.Spec.NodeSelector
 		d.Spec.Template.Spec.Tolerations = []corev1.Toleration{
-			{Operator: corev1.TolerationOpExists},
+			{
+				Key:    "node-role.kubernetes.io/edge",
+				Effect: corev1.TaintEffectNoExecute,
+			},
 		}
 	} else {
 		d.Spec.Template.Spec.Tolerations = nil
