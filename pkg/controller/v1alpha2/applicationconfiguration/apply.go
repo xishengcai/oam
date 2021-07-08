@@ -54,7 +54,7 @@ const (
 // A WorkloadApplicator creates or updates or finalizes workloads and their traits.
 type WorkloadApplicator interface {
 	// Apply a workload and its traits.
-	Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...apply.ApplyOption) error
+	Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []*Workload, ao ...apply.ApplyOption) error
 
 	// Finalize implements pre-delete hooks on workloads
 	Finalize(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error
@@ -66,7 +66,7 @@ type workloads struct {
 	dm         discoverymapper.DiscoveryMapper
 }
 
-func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []Workload, ao ...apply.ApplyOption) error {
+func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus, w []*Workload, ao ...apply.ApplyOption) error {
 	if len(w) == 0 {
 		return nil
 	}
@@ -77,7 +77,7 @@ func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus,
 		if !wl.HasDep {
 			err := a.applicator.Apply(ctx, wl.Workload, ao...)
 			if err != nil {
-				if _, ok := err.(*GenerationUnchanged); !ok {
+				if ok := errors.As(err, &GenerationUnchanged{}); !ok {
 					// GenerationUnchanged only aborts applying current workload
 					// but not blocks the whole reconciliation through returning an error
 					return errors.Wrapf(err, errFmtApplyWorkload, wl.Workload.GetName())
@@ -90,7 +90,7 @@ func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus,
 			}
 			t := trait.Object
 			if err := a.applicator.Apply(ctx, &trait.Object, ao...); err != nil {
-				if _, ok := err.(*GenerationUnchanged); !ok {
+				if ok := errors.As(err, &GenerationUnchanged{}); !ok {
 					// GenerationUnchanged only aborts applying current trait
 					// but not blocks the whole reconciliation through returning an error
 					return errors.Wrapf(err, errFmtApplyTrait, t.GetAPIVersion(), t.GetKind(), t.GetName())
@@ -103,7 +103,7 @@ func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus,
 			Name:       wl.Workload.GetName(),
 		}
 		for _, s := range wl.Scopes {
-			if err := a.applyScope(ctx, wl, s, workloadRef); err != nil {
+			if err := a.applyScope(ctx, *wl, s, workloadRef); err != nil {
 				return err
 			}
 		}
@@ -126,7 +126,7 @@ func (a *workloads) Finalize(ctx context.Context, ac *v1alpha2.ApplicationConfig
 	return nil
 }
 
-func (a *workloads) dereferenceScope(ctx context.Context, namespace string, status []v1alpha2.WorkloadStatus, w []Workload) error {
+func (a *workloads) dereferenceScope(ctx context.Context, namespace string, status []v1alpha2.WorkloadStatus, w []*Workload) error {
 	for _, st := range status {
 		toBeDeferenced := st.Scopes
 		for _, wl := range w {
@@ -181,7 +181,8 @@ func findDereferencedScopes(statusScopes []v1alpha2.WorkloadScope, scopes []unst
 	return toBeDeferenced
 }
 
-func (a *workloads) applyScope(ctx context.Context, wl Workload, s unstructured.Unstructured, workloadRef runtimev1alpha1.TypedReference) error {
+func (a *workloads) applyScope(ctx context.Context, wl Workload, s unstructured.Unstructured,
+	workloadRef runtimev1alpha1.TypedReference) error {
 	// get ScopeDefinition
 	scopeDefinition, err := util.FetchScopeDefinition(ctx, a.rawClient, a.dm, &s)
 	if err != nil {
@@ -189,7 +190,7 @@ func (a *workloads) applyScope(ctx context.Context, wl Workload, s unstructured.
 	}
 	// checkout whether scope asks for workloadRef
 	workloadRefsPath := scopeDefinition.Spec.WorkloadRefsPath
-	if len(workloadRefsPath) == 0 {
+	if workloadRefsPath == "" {
 		// this scope does not ask for workloadRefs
 		return nil
 	}
@@ -243,7 +244,7 @@ func (a *workloads) applyScopeRemoval(ctx context.Context, namespace string, wr 
 	}
 
 	workloadRefsPath := scopeDefinition.Spec.WorkloadRefsPath
-	if len(workloadRefsPath) == 0 {
+	if workloadRefsPath == "" {
 		// Scopes to be dereferenced MUST have workloadRefsPath
 		return errors.Errorf(errFmtGetScopeWorkloadRefsPath, scopeObject.GetAPIVersion(), scopeObject.GetKind(), scopeObject.GetName())
 	}
@@ -267,11 +268,11 @@ func (a *workloads) applyScopeRemoval(ctx context.Context, namespace string, wr 
 			refs[workloadRefIndex] = refs[len(refs)-1]
 			refs = refs[:len(refs)-1]
 
-			if err := fieldpath.Pave(scopeObject.UnstructuredContent()).SetValue(workloadRefsPath, refs); err != nil {
+			if err = fieldpath.Pave(scopeObject.UnstructuredContent()).SetValue(workloadRefsPath, refs); err != nil {
 				return errors.Wrapf(err, errFmtSetScopeWorkloadRef, s.Reference.Name, wr.Name)
 			}
 
-			if err := a.rawClient.Update(ctx, &scopeObject); err != nil {
+			if err = a.rawClient.Update(ctx, &scopeObject); err != nil {
 				return errors.Wrapf(err, errFmtApplyScope, s.Reference.APIVersion, s.Reference.Kind, s.Reference.Name)
 			}
 		}

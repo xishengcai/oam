@@ -7,10 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (r *Reconcile) cleanupResources(ctx context.Context,
-	volumeTrait *v1alpha2.VolumeTrait,
-	pvcName []string) error {
-
+func (r *Reconcile) cleanupResources(ctx context.Context, volumeTrait *v1alpha2.VolumeTrait, pvcName []string) error {
 	log := r.log.WithValues("gc volumeTrait pvc resources", volumeTrait.Name)
 	for _, res := range volumeTrait.Status.Resources {
 		if findStringElem(pvcName, res.Name) {

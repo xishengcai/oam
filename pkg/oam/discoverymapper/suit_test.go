@@ -126,8 +126,8 @@ var _ = Describe("Mapper discovery resources", func() {
 		Expect(k8sClient.Create(context.Background(), &crd)).Should(BeNil())
 		updatedCrdObj := crdv1.CustomResourceDefinition{}
 		Eventually(func() bool {
-			if err := k8sClient.Get(context.Background(),
-				client.ObjectKey{Name: "foos.example.com"}, &updatedCrdObj); err != nil {
+			if err = k8sClient.Get(context.Background(), client.ObjectKey{Name: "foos.example.com"},
+				&updatedCrdObj); err != nil {
 				return false
 			}
 			return len(updatedCrdObj.Spec.Versions) == 2

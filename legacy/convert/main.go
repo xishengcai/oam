@@ -22,17 +22,17 @@ func main() {
 			return nil
 		}
 		/* #nosec */
-		data, err := ioutil.ReadFile(path)
+		data, errIn := ioutil.ReadFile(path)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "failed to read file", err)
-			return err
+			_, _ = fmt.Fprintln(os.Stderr, "failed to read file", errIn)
+			return errIn
 		}
 		newdata := strings.ReplaceAll(string(data), "x-kubernetes-embedded-resource: true", "")
 		newdata = strings.ReplaceAll(newdata, "x-kubernetes-preserve-unknown-fields: true", "")
 		newdata = strings.ReplaceAll(newdata, "default: false", "")
 		/* #nosec */
 		if err = ioutil.WriteFile(path, []byte(newdata), 0644); err != nil {
-			fmt.Fprintln(os.Stderr, "failed to write file:", err)
+			_, _ = fmt.Fprintln(os.Stderr, "failed to write file:", err)
 			return err
 		}
 		return nil

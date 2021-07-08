@@ -96,7 +96,7 @@ func ValidateComponentObject(obj *v1alpha2.Component) field.ErrorList {
 	workload := unstructured.Unstructured{
 		Object: content,
 	}
-	if len(workload.GetAPIVersion()) == 0 || len(workload.GetKind()) == 0 {
+	if workload.GetAPIVersion() == "" || workload.GetKind() == "" {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("workload"), content,
 			fmt.Sprintf("the workload data missing GVK, api = %s, kind = %s,", workload.GetAPIVersion(), workload.GetKind())))
 	}

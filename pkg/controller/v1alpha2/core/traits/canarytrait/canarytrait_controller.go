@@ -51,7 +51,7 @@ type Reconciler struct {
 	Scheme      *runtime.Scheme
 }
 
-//SetupWithManager to setup k8s controller.
+// SetupWithManager to setup k8s controller.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	name := "oam/" + strings.ToLower(oamv1alpha2.HorizontalPodAutoscalerTraitKind)
 	return ctrl.NewControllerManagedBy(mgr).
