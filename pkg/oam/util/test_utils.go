@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
@@ -83,40 +84,29 @@ func (matcher ErrorMatcher) Match(actual interface{}) (success bool, err error) 
 
 // FailureMessage builds an error message.
 func (matcher ErrorMatcher) FailureMessage(actual interface{}) (message string) {
-	actualError, actualOK := actual.(error)
-	expectedError, expectedOK := matcher.ExpectedError.(error)
-
-	if actualOK && expectedOK {
-		return format.MessageWithDiff(actualError.Error(), "to equal", expectedError.Error())
-	}
-
-	if actualOK && !expectedOK {
-		return format.Message(actualError.Error(), "to equal", expectedError.Error())
-	}
-
-	if !actualOK && expectedOK {
-		return format.Message(actual, "to equal", expectedError.Error())
-	}
-
-	return format.Message(actual, "to equal", expectedError)
+	return judgeErrorMessage(matcher, actual, "to equal")
 }
 
 // NegatedFailureMessage builds an error message.
 func (matcher ErrorMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return judgeErrorMessage(matcher, actual, "not to equal")
+}
+
+func judgeErrorMessage(matcher ErrorMatcher, actual interface{}, msg string) (message string) {
 	actualError, actualOK := actual.(error)
-	expectedError, expectedOK := matcher.ExpectedError.(error)
+	expectedOK := errors.As(actualError, &matcher.ExpectedError)
 
 	if actualOK && expectedOK {
-		return format.MessageWithDiff(actualError.Error(), "not to equal", expectedError.Error())
+		return format.MessageWithDiff(actualError.Error(), msg, matcher.ExpectedError.Error())
 	}
 
 	if actualOK && !expectedOK {
-		return format.Message(actualError.Error(), "not to equal", expectedError.Error())
+		return format.Message(actualError.Error(), msg, matcher.ExpectedError.Error())
 	}
 
 	if !actualOK && expectedOK {
-		return format.Message(actual, "not to equal", expectedError.Error())
+		return format.Message(actual, msg, matcher.ExpectedError.Error())
 	}
 
-	return format.Message(actual, "not to equal", expectedError)
+	return format.Message(actual, msg, matcher.ExpectedError)
 }

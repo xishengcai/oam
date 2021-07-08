@@ -34,29 +34,25 @@ import (
 )
 
 var (
-	//KindDeployment is the k8s Deployment kind.
+	// KindDeployment is the k8s Deployment kind.
 	KindDeployment = reflect.TypeOf(appsv1.Deployment{}).Name()
-	//KindService is the k8s Service kind.
+	// KindService is the k8s Service kind.
 	KindService = reflect.TypeOf(corev1.Service{}).Name()
-	//KindStatefulSet is the k8s StatefulSet kind
+	// KindStatefulSet is the k8s StatefulSet kind
 	KindStatefulSet = reflect.TypeOf(appsv1.StatefulSet{}).Name()
-	//KindVolumeTrait is the k8s VolumeTrait kind
+	// KindVolumeTrait is the k8s VolumeTrait kind
 	KindVolumeTrait = reflect.TypeOf(v1alpha2.VolumeTrait{}).Name()
-	//KindPersistentVolumeClaim is the k8s PersistentVolumeClaim kind
+	// KindPersistentVolumeClaim is the k8s PersistentVolumeClaim kind
 	KindPersistentVolumeClaim = reflect.TypeOf(corev1.PersistentVolumeClaim{}).Name()
-	//ReconcileWaitResult is the time to wait between reconciliation.
+	// ReconcileWaitResult is the time to wait between reconciliation.
 	ReconcileWaitResult = reconcile.Result{RequeueAfter: 30 * time.Second}
-
-	//KindConfigMap is the k8s Deployment kind.
+	// KindConfigMap is the k8s Deployment kind.
 	KindConfigMap = reflect.TypeOf(corev1.ConfigMap{}).Name()
-
-	//LabelKeyChildResource us containerized workload child resource
+	// LabelKeyChildResource us containerized workload child resource
 	LabelKeyChildResource = "app.oam.dev/childResource"
-
-	//LabelAppID istio app must has this label key
+	// LabelAppID istio app must has this label key
 	LabelAppID = "oam.runtime.app.id"
-
-	//LabelComponentID launcher.app must has it
+	// LabelComponentID launcher.app must has it
 	LabelComponentID = "oam.runtime.component.id"
 )
 
@@ -125,7 +121,7 @@ func LocateParentAppConfig(ctx context.Context, client client.Client, oamObject 
 func FetchWorkload(ctx context.Context, c client.Client, mLog logr.Logger, oamTrait oam.Trait) (*unstructured.Unstructured, error) {
 	var workload unstructured.Unstructured
 	workloadRef := oamTrait.GetWorkloadReference()
-	if len(workloadRef.Kind) == 0 || len(workloadRef.APIVersion) == 0 || len(workloadRef.Name) == 0 {
+	if workloadRef.Kind == "" || workloadRef.APIVersion == "" || workloadRef.Name == "" {
 		err := errors.New("no workload reference")
 		mLog.Error(err, ErrLocateWorkload)
 		return nil, err
@@ -377,7 +373,6 @@ func GenTraitName(componentName string, ct *v1alpha2.ComponentTrait, traitType s
 		traitMiddleName = strings.ToLower(traitType)
 	}
 	return fmt.Sprintf("%s-%s-%s", componentName, traitMiddleName, ComputeHash(ct))
-
 }
 
 // ComputeHash returns a hash value calculated from pod template and
@@ -410,10 +405,11 @@ func GetComponent(ctx context.Context, client client.Reader, acc v1alpha2.Applic
 	var revisionName string
 	if acc.RevisionName != "" {
 		revision := &appsv1.ControllerRevision{}
-		if err := client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: acc.RevisionName}, revision); err != nil {
+		err := client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: acc.RevisionName}, revision)
+		if err != nil {
 			return nil, "", errors.Wrapf(err, errFmtGetComponentRevision, acc.RevisionName)
 		}
-		c, err := UnpackRevisionData(revision)
+		c, err = UnpackRevisionData(revision)
 		if err != nil {
 			return nil, "", errors.Wrapf(err, errFmtControllerRevisionData, acc.RevisionName)
 		}

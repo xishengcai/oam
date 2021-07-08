@@ -33,8 +33,9 @@ type CanaryTraitSpec struct {
 	// +optional
 	Header map[string]string `json:"header,omitempty"`
 
+	// Proportion 灰度发布流量比例, range: 0-100
 	// +optional
-	Proportion int32 `json:"proportion,omitempty"` //灰度发布流量比例, range: 0-100
+	Proportion int32 `json:"proportion,omitempty"`
 
 	// WorkloadReference to the workload this trait applies to.
 	// +optional

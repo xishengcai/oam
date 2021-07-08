@@ -59,26 +59,27 @@ var mutatelog = logf.Log.WithName("component mutate webhook")
 var _ admission.Handler = &MutatingHandler{}
 
 // Handle handles admission requests.
-func (h *MutatingHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (h *MutatingHandler) Handle(_ context.Context, req admission.Request) admission.Response {
 	obj := &v1alpha2.Component{}
+	var marshaled []byte
 
 	err := h.Decoder.Decode(req, obj)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	// mutate the object
-	if err := h.Mutate(obj); err != nil {
+	if err = h.Mutate(obj); err != nil {
 		mutatelog.Error(err, "failed to mutate the component", "name", obj.Name)
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	mutatelog.Info("Print the mutated obj", "obj name", obj.Name, "mutated obj", string(obj.Spec.Workload.Raw))
 
-	marshalled, err := json.Marshal(obj)
+	marshaled, err = json.Marshal(obj)
 	if err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	resp := admission.PatchResponseFromRaw(req.AdmissionRequest.Object.Raw, marshalled)
+	resp := admission.PatchResponseFromRaw(req.AdmissionRequest.Object.Raw, marshaled)
 	if len(resp.Patches) > 0 {
 		mutatelog.Info("admit Component",
 			"namespace", obj.Namespace, "name", obj.Name, "patches", util.JSONMarshal(resp.Patches))

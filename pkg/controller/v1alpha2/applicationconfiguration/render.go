@@ -48,11 +48,11 @@ import (
 const (
 	errUnmarshalWorkload = "cannot unmarshal workload"
 	errUnmarshalTrait    = "cannot unmarshal trait"
+	errValueEmpty        = "value should not be empty"
 )
 
 // Render error format strings.
 const (
-	errFmtGetComponent     = "cannot get component %q"
 	errFmtGetScope         = "cannot get scope %q"
 	errFmtResolveParams    = "cannot resolve parameter values for component %q"
 	errFmtRenderWorkload   = "cannot render workload for component %q"
@@ -76,15 +76,17 @@ const (
 // A ComponentRenderer renders an ApplicationConfiguration's Components into
 // workloads and traits.
 type ComponentRenderer interface {
-	Render(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error)
+	Render(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) ([]*Workload, *v1alpha2.DependencyStatus, error)
 }
 
 // A ComponentRenderFn renders an ApplicationConfiguration's Components into
 // workloads and traits.
-type ComponentRenderFn func(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error)
+type ComponentRenderFn func(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) (
+	[]Workload, *v1alpha2.DependencyStatus, error)
 
 // Render an ApplicationConfiguration's Components into workloads and traits.
-func (fn ComponentRenderFn) Render(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
+func (fn ComponentRenderFn) Render(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) (
+	[]Workload, *v1alpha2.DependencyStatus, error) {
 	return fn(ctx, ac)
 }
 
@@ -98,7 +100,7 @@ type components struct {
 	trait    ResourceRenderer
 }
 
-func (r *components) Render(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) ([]Workload, *v1alpha2.DependencyStatus, error) {
+func (r *components) Render(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) ([]*Workload, *v1alpha2.DependencyStatus, error) {
 	workloads := make([]*Workload, 0, len(ac.Spec.Components))
 	dag := newDAG()
 
@@ -112,14 +114,14 @@ func (r *components) Render(ctx context.Context, ac *v1alpha2.ApplicationConfigu
 	}
 
 	ds := &v1alpha2.DependencyStatus{}
-	res := make([]Workload, 0, len(ac.Spec.Components))
+	res := make([]*Workload, 0, len(ac.Spec.Components))
 	for i, acc := range ac.Spec.Components {
 		unsatisfied, err := r.handleDependency(ctx, workloads[i], acc, dag, ac)
 		if err != nil {
 			return nil, nil, err
 		}
 		ds.Unsatisfied = append(ds.Unsatisfied, unsatisfied...)
-		res = append(res, *workloads[i])
+		res = append(res, workloads[i])
 	}
 
 	return res, ds, nil
@@ -171,9 +173,9 @@ func (r *components) renderComponent(ctx context.Context,
 	compInfoLabels[oam.LabelOAMResourceType] = oam.ResourceTypeTrait
 
 	for _, ct := range acc.Traits {
-		t, traitDef, err := r.renderTrait(ctx, ct, ac, acc.ComponentName, ref, dag)
-		if err != nil {
-			return nil, err
+		t, traitDef, errIn := r.renderTrait(ctx, ct, ac, acc.ComponentName, ref, dag)
+		if errIn != nil {
+			return nil, errIn
 		}
 		util.AddLabels(t, compInfoLabels)
 		util.AddAnnotations(t, compInfoAnnotations)
@@ -188,7 +190,6 @@ func (r *components) renderComponent(ctx context.Context,
 			if len(volumeTrait.Spec.VolumeList) != 0 {
 				volumeTraitExit = true
 			}
-
 		}
 	}
 
@@ -460,7 +461,8 @@ func addDataOutputsToDAG(dag *dag, outs []v1alpha2.DataOutput, obj *unstructured
 	}
 }
 
-func (r *components) handleDependency(ctx context.Context, w *Workload, acc v1alpha2.ApplicationConfigurationComponent, dag *dag, ac *v1alpha2.ApplicationConfiguration) ([]v1alpha2.UnstaifiedDependency, error) {
+func (r *components) handleDependency(ctx context.Context, w *Workload, acc v1alpha2.ApplicationConfigurationComponent,
+	dag *dag, ac *v1alpha2.ApplicationConfiguration) ([]v1alpha2.UnstaifiedDependency, error) {
 	uds := make([]v1alpha2.UnstaifiedDependency, 0)
 	unstructuredAC, err := util.Object2Unstructured(ac)
 	if err != nil {
@@ -489,7 +491,8 @@ func (r *components) handleDependency(ctx context.Context, w *Workload, acc v1al
 	return uds, nil
 }
 
-func makeUnsatisfiedDependency(obj *unstructured.Unstructured, s *dagSource, in v1alpha2.DataInput, reason string) v1alpha2.UnstaifiedDependency {
+func makeUnsatisfiedDependency(obj *unstructured.Unstructured, s *dagSource, in v1alpha2.DataInput,
+	reason string) v1alpha2.UnstaifiedDependency {
 	return v1alpha2.UnstaifiedDependency{
 		Reason: reason,
 		From: v1alpha2.DependencyFromObject{
@@ -511,7 +514,8 @@ func makeUnsatisfiedDependency(obj *unstructured.Unstructured, s *dagSource, in 
 	}
 }
 
-func (r *components) handleDataInput(ctx context.Context, ins []v1alpha2.DataInput, dag *dag, obj, ac *unstructured.Unstructured) ([]v1alpha2.UnstaifiedDependency, error) {
+func (r *components) handleDataInput(ctx context.Context, ins []v1alpha2.DataInput, dag *dag, obj,
+	ac *unstructured.Unstructured) ([]v1alpha2.UnstaifiedDependency, error) {
 	uds := make([]v1alpha2.UnstaifiedDependency, 0)
 	for _, in := range ins {
 		s, ok := dag.Sources[in.ValueFrom.DataOutputName]
@@ -610,7 +614,7 @@ func matchValue(conds []v1alpha2.ConditionRequirement, val string, paved, ac *fi
 	// If no condition is specified, it is by default to check value not empty.
 	if len(conds) == 0 {
 		if val == "" {
-			return false, "value should not be empty"
+			return false, errValueEmpty
 		}
 		return true, ""
 	}
@@ -641,7 +645,7 @@ func getExpectVal(m v1alpha2.ConditionRequirement, ac *fieldpath.Paved) (string,
 	var err error
 	value, err := ac.GetString(m.ValueFrom.FieldPath)
 	if err != nil {
-		return "", fmt.Errorf("get valueFrom.fieldPath fail: %v", err)
+		return "", fmt.Errorf("get valueFrom.fieldPath fail: %w", err)
 	}
 	return value, nil
 }
@@ -668,7 +672,7 @@ func checkConditions(conds []v1alpha2.ConditionRequirement, paved *fieldpath.Pav
 			}
 		case v1alpha2.ConditionNotEmpty:
 			if checkVal == "" {
-				return false, "value should not be empty"
+				return false, errValueEmpty
 			}
 		}
 	}
@@ -715,7 +719,8 @@ func getTraitName(ac *v1alpha2.ApplicationConfiguration, componentName string,
 }
 
 // getExistingWorkload tries to retrieve the currently running workload
-func (r *components) getExistingWorkload(ctx context.Context, ac *v1alpha2.ApplicationConfiguration, c *v1alpha2.Component, w *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func (r *components) getExistingWorkload(ctx context.Context, ac *v1alpha2.ApplicationConfiguration,
+	c *v1alpha2.Component, w *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	var workloadName string
 	existingWorkload := &unstructured.Unstructured{}
 	for _, component := range ac.Status.Workloads {
