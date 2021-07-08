@@ -183,7 +183,6 @@ func (r *Reconciler) scaleResources(ctx context.Context, mLog logr.Logger,
 			}
 			mLog.Info("Successfully scaled a resource", "resource GVK", res.GroupVersionKind().String(),
 				"res UID", res.GetUID(), "target replica", manualScalar.Spec.ReplicaCount)
-
 		}
 	}
 	if !found {

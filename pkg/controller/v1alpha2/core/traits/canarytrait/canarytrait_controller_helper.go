@@ -41,9 +41,13 @@ func (r *Reconciler) renderDestinationRule(trait oamv1alpha2.CanaryTrait) (*v1al
 	if err := ctrl.SetControllerReference(&trait, &destinationRule, r.Scheme); err != nil {
 		return nil, err
 	}
-	dr, err := r.IstioClient.NetworkingV1alpha3().DestinationRules(trait.Namespace).Get(context.TODO(), trait.Name, metav1.GetOptions{})
+
+	dr, err := r.IstioClient.NetworkingV1alpha3().DestinationRules(trait.Namespace).
+		Get(context.TODO(), trait.Name, metav1.GetOptions{})
+
 	if kerrors.IsNotFound(err) {
-		dr, err := r.IstioClient.NetworkingV1alpha3().DestinationRules(trait.Namespace).Create(context.TODO(), &destinationRule, metav1.CreateOptions{})
+		dr, err = r.IstioClient.NetworkingV1alpha3().DestinationRules(trait.Namespace).
+			Create(context.TODO(), &destinationRule, metav1.CreateOptions{})
 		return dr, err
 	}
 
@@ -51,9 +55,9 @@ func (r *Reconciler) renderDestinationRule(trait oamv1alpha2.CanaryTrait) (*v1al
 		return nil, err
 	}
 	dr.Spec = destinationRule.Spec
-	dr, err = r.IstioClient.NetworkingV1alpha3().DestinationRules(trait.Namespace).Update(context.TODO(), dr, metav1.UpdateOptions{})
+	dr, err = r.IstioClient.NetworkingV1alpha3().DestinationRules(trait.Namespace).
+		Update(context.TODO(), dr, metav1.UpdateOptions{})
 	return dr, err
-
 }
 
 func (r *Reconciler) renderVirtualService(trait oamv1alpha2.CanaryTrait) (*v1alpha3.VirtualService, error) {
@@ -100,9 +104,11 @@ func (r *Reconciler) renderVirtualService(trait oamv1alpha2.CanaryTrait) (*v1alp
 	if err := ctrl.SetControllerReference(&trait, &virtualService, r.Scheme); err != nil {
 		return nil, err
 	}
-	vs, err := r.IstioClient.NetworkingV1alpha3().VirtualServices(trait.Namespace).Get(context.TODO(), trait.Name, metav1.GetOptions{})
+	vs, err := r.IstioClient.NetworkingV1alpha3().VirtualServices(trait.Namespace).
+		Get(context.TODO(), trait.Name, metav1.GetOptions{})
 	if kerrors.IsNotFound(err) {
-		vs, err := r.IstioClient.NetworkingV1alpha3().VirtualServices(trait.Namespace).Create(context.TODO(), &virtualService, metav1.CreateOptions{})
+		vs, err = r.IstioClient.NetworkingV1alpha3().VirtualServices(trait.Namespace).
+			Create(context.TODO(), &virtualService, metav1.CreateOptions{})
 		return vs, err
 	}
 

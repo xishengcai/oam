@@ -24,7 +24,7 @@ import (
 
 var scheme = runtime.NewScheme()
 
-func init() {
+func setup() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = core.AddToScheme(scheme)
 	_ = crdv1.AddToScheme(scheme)
@@ -39,9 +39,9 @@ func main() {
 	var webhookPort int
 	var useWebhook bool
 	var debugLogs bool
-	var controllerArgs controller.Args
+	var controllerArgs = controller.Args{}
 
-	flag.BoolVar(&debugLogs, "debug", false, "Enable the debug logs useful for development")
+	flag.BoolVar(&debugLogs, "debug", true, "Enable the debug logs useful for development")
 	flag.BoolVar(&useWebhook, "use-webhook", false, "Enable Admission Webhook")
 	flag.StringVar(&certDir, "webhook-cert-dir", "/k8s-webhook-server/serving-certs", "Admission webhook cert/key dir.")
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "admission webhook listen address")
@@ -59,6 +59,9 @@ func main() {
 		"For the purpose of some production environment that workload or trait should not be affected if no spec change")
 	flag.DurationVar(&controllerArgs.SyncTime, "sync-time", 60*time.Second, "Set Reconcile exec interval,unit is second")
 	flag.Parse()
+
+	// use set replace init
+	setup()
 
 	// setup logging
 	var w io.Writer
@@ -98,7 +101,6 @@ func main() {
 			oamLog.Error(err, "unable to setup the webhook for core controller")
 			os.Exit(1)
 		}
-
 	}
 
 	if err = appController.Setup(mgr, controllerArgs, logging.NewLogrLogger(oamLog)); err != nil {

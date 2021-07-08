@@ -31,9 +31,11 @@ type ControllerHooks interface {
 }
 
 // ControllerHooksFn reconciles an ApplicationConfiguration
-type ControllerHooksFn func(ctx context.Context, ac *v1alpha2.ApplicationConfiguration, logger logging.Logger) (reconcile.Result, error)
+type ControllerHooksFn func(ctx context.Context, ac *v1alpha2.ApplicationConfiguration, logger logging.Logger) (
+	reconcile.Result, error)
 
 // Exec the customized reconcile logic on the ApplicationConfiguration
-func (fn ControllerHooksFn) Exec(ctx context.Context, ac *v1alpha2.ApplicationConfiguration, logger logging.Logger) (reconcile.Result, error) {
+func (fn ControllerHooksFn) Exec(ctx context.Context, ac *v1alpha2.ApplicationConfiguration, logger logging.Logger) (
+	reconcile.Result, error) {
 	return fn(ctx, ac, logger)
 }

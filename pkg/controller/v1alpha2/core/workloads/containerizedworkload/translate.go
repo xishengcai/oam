@@ -64,7 +64,6 @@ type ChildWorkload struct {
 }
 
 // TranslateContainerWorkload translates a ContainerizedWorkload into a Deployment.
-// nolint:gocyclo
 func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 	cw, ok := w.(*v1alpha2.ContainerizedWorkload)
 	if !ok {
@@ -106,7 +105,6 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 					mount.ReadOnly = true
 				}
 				kubernetesContainer.VolumeMounts = append(kubernetesContainer.VolumeMounts, mount)
-
 			}
 		}
 
@@ -190,7 +188,9 @@ func translateConfigFileToVolume(cf v1alpha2.ContainerConfigFile, wlName, contai
 			name, _ := generateConfigMapName(cf.Path, wlName, containerName)
 			v.Name = name
 			vm.Name = name
-			vm.SubPath = fileName //既是挂载的文件名，又是configMap 的key
+
+			// 既是挂载的文件名，又是configMap 的key
+			vm.SubPath = fileName
 			vm.MountPath = cf.Path
 		}
 		return v, vm
@@ -232,7 +232,7 @@ func generateConfigMapName(mountPath, wlName, containerName string) (string, err
 }
 
 // TranslateConfigMaps translate non-secret ContainerConfigFile into ConfigMaps
-func TranslateConfigMaps(ctx context.Context, w oam.Object) (map[string]*corev1.ConfigMap, error) {
+func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.ConfigMap, error) {
 	cw, ok := w.(*v1alpha2.ContainerizedWorkload)
 	if !ok {
 		return nil, errors.New(errNotContainerizedWorkload)
@@ -276,7 +276,7 @@ func TranslateConfigMaps(ctx context.Context, w oam.Object) (map[string]*corev1.
 
 // ServiceInjector adds a Service object for the first Port on the first
 // Container for the first Deployment observed in a workload translation.
-func ServiceInjector(ctx context.Context, w oam.Workload, obj runtime.Object) (*corev1.Service, error) {
+func ServiceInjector(_ context.Context, w oam.Workload, obj runtime.Object) (*corev1.Service, error) {
 	if obj == nil {
 		return nil, nil
 	}

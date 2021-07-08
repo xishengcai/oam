@@ -50,7 +50,8 @@ type ValidatingTrait struct {
 }
 
 // PrepareForValidation prepares data for validations to avoiding repetitive GET/unmarshal operations
-func (v *ValidatingAppConfig) PrepareForValidation(ctx context.Context, c client.Reader, dm discoverymapper.DiscoveryMapper, ac *v1alpha2.ApplicationConfiguration) error {
+func (v *ValidatingAppConfig) PrepareForValidation(ctx context.Context, c client.Reader,
+	dm discoverymapper.DiscoveryMapper, ac *v1alpha2.ApplicationConfiguration) error {
 	v.appConfig = *ac
 	v.validatingComps = make([]ValidatingComponent, 0, len(ac.Spec.Components))
 	for _, acc := range ac.Spec.Components {
@@ -70,7 +71,7 @@ func (v *ValidatingAppConfig) PrepareForValidation(ctx context.Context, c client
 
 		// get worload content from raw
 		var wlContentObject map[string]interface{}
-		if err := json.Unmarshal(comp.Spec.Workload.Raw, &wlContentObject); err != nil {
+		if err = json.Unmarshal(comp.Spec.Workload.Raw, &wlContentObject); err != nil {
 			return errors.Wrapf(err, errFmtUnmarshalWorkload, tmp.compName)
 		}
 		wl := unstructured.Unstructured{

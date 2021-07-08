@@ -107,17 +107,23 @@ func (c *ComponentHandler) IsRevisionDiff(mt metav1.Object, curComp *v1alpha2.Co
 	// client in controller-runtime will use infoermer cache
 	// use client will be more efficient
 	oldRev := &appsv1.ControllerRevision{}
-	if err := c.Client.Get(context.TODO(), client.ObjectKey{Namespace: mt.GetNamespace(), Name: curComp.Status.LatestRevision.Name}, oldRev); err != nil {
-		c.Logger.Info(fmt.Sprintf("get old controllerRevision %s error %v, will create new revision", curComp.Status.LatestRevision.Name, err), "componentName", mt.GetName())
+	if err := c.Client.Get(context.TODO(),
+		client.ObjectKey{
+			Namespace: mt.GetNamespace(),
+			Name:      curComp.Status.LatestRevision.Name}, oldRev); err != nil {
+		c.Logger.Info(fmt.Sprintf("get old controllerRevision %s error %v, will create new revision",
+			curComp.Status.LatestRevision.Name, err), "componentName", mt.GetName())
 		return true, curComp.Status.LatestRevision.Revision
 	}
 	if oldRev.Name == "" {
-		c.Logger.Info(fmt.Sprintf("Not found controllerRevision %s", curComp.Status.LatestRevision.Name), "componentName", mt.GetName())
+		c.Logger.Info(fmt.Sprintf("Not found controllerRevision %s", curComp.Status.LatestRevision.Name),
+			"componentName", mt.GetName())
 		return true, curComp.Status.LatestRevision.Revision
 	}
 	oldComp, err := util.UnpackRevisionData(oldRev)
 	if err != nil {
-		c.Logger.Info(fmt.Sprintf("Unmarshal old controllerRevision %s error %v, will create new revision", curComp.Status.LatestRevision.Name, err), "componentName", mt.GetName())
+		c.Logger.Info(fmt.Sprintf("Unmarshal old controllerRevision %s error %v, will create new revision",
+			curComp.Status.LatestRevision.Name, err), "componentName", mt.GetName())
 		return true, oldRev.Revision
 	}
 
@@ -181,7 +187,8 @@ func (c *ComponentHandler) createControllerRevision(mt metav1.Object, obj runtim
 
 	err = c.Client.Status().Update(context.Background(), comp)
 	if err != nil {
-		c.Logger.Info(fmt.Sprintf("update component status latestRevision %s err %v", revisionName, err), "componentName", mt.GetName())
+		c.Logger.Info(fmt.Sprintf("update component status latestRevision %s err %v", revisionName, err),
+			"componentName", mt.GetName())
 		return false
 	}
 	c.Logger.Info(fmt.Sprintf("ControllerRevision %s created", revisionName))

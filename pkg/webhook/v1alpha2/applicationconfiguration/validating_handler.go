@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	errFmtWorkloadNameNotEmpty = "versioning-enabled component's workload name MUST NOT be assigned, expect workload name %q to be empty."
+	errFmtWorkloadNameNotEmpty = "versioning-enabled component's workload name MUST NOT be assigned, expect workload name %q to be empty"
 
 	errFmtRevisionName = "componentName %q and revisionName %q are mutually exclusive, you can only specify one of them"
 
@@ -113,7 +113,7 @@ func ValidateTraitObjectFn(_ context.Context, v ValidatingAppConfig) []error {
 				allErrs = append(allErrs, field.Invalid(fldPath, string(tr.componentTrait.Trait.Raw),
 					"the trait contains 'properties' info that should be mutated to spec"))
 			}
-			if len(tr.traitContent.GetAPIVersion()) == 0 || len(tr.traitContent.GetKind()) == 0 {
+			if tr.traitContent.GetAPIVersion() == "" || tr.traitContent.GetKind() == "" {
 				allErrs = append(allErrs, field.Invalid(fldPath, content,
 					fmt.Sprintf("the trait data missing GVK, api = %s, kind = %s,",
 						tr.traitContent.GetAPIVersion(), tr.traitContent.GetKind())))

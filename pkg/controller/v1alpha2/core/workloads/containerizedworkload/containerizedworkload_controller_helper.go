@@ -18,7 +18,6 @@ import (
 
 // create a corresponding deployment
 func (r *Reconciler) renderChildResource(workload *v1alpha2.ContainerizedWorkload) (runtime.Object, error) {
-
 	resource, err := TranslateContainerWorkload(workload)
 	if err != nil {
 		return nil, err
@@ -34,15 +33,11 @@ func (r *Reconciler) renderChildResource(workload *v1alpha2.ContainerizedWorkloa
 }
 
 // delete childResource that are not the same as the existing
-// nolint:gocyclo
-func (r *Reconciler) cleanupResources(ctx context.Context,
-	workload *v1alpha2.ContainerizedWorkload,
-	childResourceKind string,
-	childResourceUID types.UID) error {
-
+func (r *Reconciler) cleanupResources(ctx context.Context, workload *v1alpha2.ContainerizedWorkload,
+	childResourceKind string, childResourceUID types.UID) error {
 	log := r.log.WithValues("gc childResource", workload.Name)
 	for _, res := range workload.Status.Resources {
-		//if res.Kind == childResourceKind && res.APIVersion == appsv1.SchemeGroupVersion.String() {
+		// if res.Kind == childResourceKind && res.APIVersion == appsv1.SchemeGroupVersion.String() {
 		if res.Kind == childResourceKind {
 			if res.UID != childResourceUID {
 				dn := client.ObjectKey{Name: res.Name, Namespace: workload.Namespace}

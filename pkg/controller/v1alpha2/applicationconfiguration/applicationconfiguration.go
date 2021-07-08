@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
-	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
@@ -85,7 +84,7 @@ const (
 func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
-		return fmt.Errorf("create discovery dm fail %v", err)
+		return err
 	}
 	name := "oam/" + strings.ToLower(v1alpha2.ApplicationConfigurationGroupKind)
 
@@ -200,12 +199,11 @@ func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...Reco
 	return r
 }
 
+// Reconcile an OAM ApplicationConfigurations by rendering and instantiating its
+// Components and Traits.
 // NOTE(negz): We don't validate anything against their definitions at the
 // controller level. We assume this will be done by validating admission
 // webhooks.
-
-// Reconcile an OAM ApplicationConfigurations by rendering and instantiating its
-// Components and Traits.
 func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reconcile.Result, returnErr error) {
 	log := r.log.WithValues("request", req)
 	log.Debug("Reconciling")
@@ -298,7 +296,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
 		e := e
 
-		log := log.WithValues("kind", e.GetKind(), "name", e.GetName())
+		log = log.WithValues("kind", e.GetKind(), "name", e.GetName())
 		record := r.record.WithAnnotations("kind", e.GetKind(), "name", e.GetName())
 
 		if err := r.client.Delete(ctx, &e); resource.IgnoreNotFound(err) != nil {
@@ -324,7 +322,8 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	return reconcile.Result{RequeueAfter: r.syncTime}, nil
 }
 
-func (r *OAMApplicationReconciler) updateStatus(ctx context.Context, ac, acPatch *v1alpha2.ApplicationConfiguration, workloads []Workload) {
+func (r *OAMApplicationReconciler) updateStatus(ctx context.Context, ac, acPatch *v1alpha2.ApplicationConfiguration,
+	workloads []*Workload) {
 	ac.Status.Workloads = make([]v1alpha2.WorkloadStatus, len(workloads))
 	historyWorkloads := make([]v1alpha2.HistoryWorkload, 0)
 	for i, w := range workloads {
@@ -335,7 +334,10 @@ func (r *OAMApplicationReconciler) updateStatus(ctx context.Context, ac, acPatch
 		var ul unstructured.UnstructuredList
 		ul.SetKind(w.Workload.GetKind())
 		ul.SetAPIVersion(w.Workload.GetAPIVersion())
-		if err := r.client.List(ctx, &ul, client.MatchingLabels{oam.LabelAppName: ac.Name, oam.LabelAppComponent: w.ComponentName, oam.LabelOAMResourceType: oam.ResourceTypeWorkload}); err != nil {
+		if err := r.client.List(ctx, &ul, client.MatchingLabels{
+			oam.LabelAppName:         ac.Name,
+			oam.LabelAppComponent:    w.ComponentName,
+			oam.LabelOAMResourceType: oam.ResourceTypeWorkload}); err != nil {
 			continue
 		}
 		for _, v := range ul.Items {
@@ -357,7 +359,7 @@ func (r *OAMApplicationReconciler) updateStatus(ctx context.Context, ac, acPatch
 	}
 	ac.Status.HistoryWorkloads = historyWorkloads
 	// patch the extra fields in the status that is wiped by the Status() function
-	patchExtraStatusField(&ac.Status, acPatch.Status)
+	patchExtraStatusField(&ac.Status, &acPatch.Status)
 	ac.SetConditions(v1alpha1.ReconcileSuccess())
 }
 
@@ -367,7 +369,7 @@ func updateObservedGeneration(ac *v1alpha2.ApplicationConfiguration) {
 	}
 }
 
-func patchExtraStatusField(acStatus *v1alpha2.ApplicationConfigurationStatus, acPatchStatus v1alpha2.ApplicationConfigurationStatus) {
+func patchExtraStatusField(acStatus, acPatchStatus *v1alpha2.ApplicationConfigurationStatus) {
 	// patch the extra status back
 	for i := range acStatus.Workloads {
 		for _, w := range acPatchStatus.Workloads {
@@ -452,7 +454,7 @@ func (w Workload) Status() v1alpha2.WorkloadStatus {
 	acw := v1alpha2.WorkloadStatus{
 		ComponentName:         w.ComponentName,
 		ComponentRevisionName: w.ComponentRevisionName,
-		Reference: runtimev1alpha1.TypedReference{
+		Reference: v1alpha1.TypedReference{
 			APIVersion: w.Workload.GetAPIVersion(),
 			Kind:       w.Workload.GetKind(),
 			Name:       w.Workload.GetName(),
@@ -464,14 +466,14 @@ func (w Workload) Status() v1alpha2.WorkloadStatus {
 		if tr.Definition.Name == util.Dummy && tr.Definition.Spec.Reference.Name == util.Dummy {
 			acw.Traits[i].Message = util.DummyTraitMessage
 		}
-		acw.Traits[i].Reference = runtimev1alpha1.TypedReference{
+		acw.Traits[i].Reference = v1alpha1.TypedReference{
 			APIVersion: w.Traits[i].Object.GetAPIVersion(),
 			Kind:       w.Traits[i].Object.GetKind(),
 			Name:       w.Traits[i].Object.GetName(),
 		}
 	}
 	for i, s := range w.Scopes {
-		acw.Scopes[i].Reference = runtimev1alpha1.TypedReference{
+		acw.Scopes[i].Reference = v1alpha1.TypedReference{
 			APIVersion: s.GetAPIVersion(),
 			Kind:       s.GetKind(),
 			Name:       s.GetName(),
@@ -484,34 +486,34 @@ func (w Workload) Status() v1alpha2.WorkloadStatus {
 // resource is considered eligible if a reference exists in the supplied slice
 // of workload statuses, but not in the supplied slice of workloads.
 type GarbageCollector interface {
-	Eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []Workload) []unstructured.Unstructured
+	Eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured
 }
 
 // A GarbageCollectorFn returns resource eligible for garbage collection.
-type GarbageCollectorFn func(namespace string, ws []v1alpha2.WorkloadStatus, w []Workload) []unstructured.Unstructured
+type GarbageCollectorFn func(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured
 
 // Eligible resources.
-func (fn GarbageCollectorFn) Eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []Workload) []unstructured.Unstructured {
+func (fn GarbageCollectorFn) Eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured {
 	return fn(namespace, ws, w)
 }
 
 // IsRevisionWorkload check is a workload is an old revision Workload which shouldn't be garbage collected.
-// TODO(wonderflow): Do we have a better way to recognise it's a revisionWorkload which can't be garbage collected by AppConfig?
+// TODO(wonderflow): Do we have a better way to recognize it's a revisionWorkload which can't be garbage collected by AppConfig?
 func IsRevisionWorkload(status v1alpha2.WorkloadStatus) bool {
 	return strings.HasPrefix(status.Reference.Name, status.ComponentName+"-")
 }
 
-func eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []Workload) []unstructured.Unstructured {
-	applied := make(map[runtimev1alpha1.TypedReference]bool)
+func eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured {
+	applied := make(map[v1alpha1.TypedReference]bool)
 	for _, wl := range w {
-		r := runtimev1alpha1.TypedReference{
+		r := v1alpha1.TypedReference{
 			APIVersion: wl.Workload.GetAPIVersion(),
 			Kind:       wl.Workload.GetKind(),
 			Name:       wl.Workload.GetName(),
 		}
 		applied[r] = true
 		for _, t := range wl.Traits {
-			r := runtimev1alpha1.TypedReference{
+			r := v1alpha1.TypedReference{
 				APIVersion: t.Object.GetAPIVersion(),
 				Kind:       t.Object.GetKind(),
 				Name:       t.Object.GetName(),
@@ -521,7 +523,6 @@ func eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []Workload) []un
 	}
 	eligible := make([]unstructured.Unstructured, 0)
 	for _, s := range ws {
-
 		if !applied[s.Reference] && !IsRevisionWorkload(s) {
 			w := &unstructured.Unstructured{}
 			w.SetAPIVersion(s.Reference.APIVersion)

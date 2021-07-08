@@ -44,7 +44,7 @@ const (
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
+func Setup(mgr ctrl.Manager, _ controller.Args, _ logging.Logger) error {
 	name := "oam/" + strings.ToLower(oamv1alpha2.VolumeTraitKind)
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
@@ -145,7 +145,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{RequeueAfter: waitTime}, util.PatchCondition(ctx, r, &volumeTrait, cpv1alpha1.ReconcileSuccess())
 }
 
-// identify child resources and add volume
+// mountVolume find child resources and add mount volume
 func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 	volumeTrait *oamv1alpha2.VolumeTrait, resources []*unstructured.Unstructured) (ctrl.Result, error) {
 	isController := false
@@ -169,7 +169,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		BlockOwnerDeletion: &bod,
 	}
 	for _, res := range resources {
-
 		if res.GetKind() != util.KindStatefulSet && res.GetKind() != util.KindDeployment {
 			continue
 		}
@@ -232,7 +231,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 			volumeMounts = append(volumeMounts, getHasPvcVolumeMounts(oldVolumes, oldVolumeMounts)...)
 
 			c["volumeMounts"] = volumeMounts
-
 		}
 		// 继续构建volumes， 遍历old volumes， 找到pvc == nil的，追加到数组中
 		volumes = mergeVolumes(oldVolumes, volumes)
@@ -285,7 +283,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 		}
 		mLog.Info("Successfully patch a resource", "resource GVK", res.GroupVersionKind().String(),
 			"res UID", res.GetUID(), "target volumeClaimTemplates", volumeTrait.Spec.VolumeList)
-
 	}
 
 	volumeTrait.Status.Resources = statusResources
@@ -338,14 +335,14 @@ func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMo
 	return
 }
 
-func mergeVolumes(old []v1.Volume, new []v1.Volume) []v1.Volume {
-	for _, x := range old {
+func mergeVolumes(olds, news []v1.Volume) []v1.Volume {
+	for _, x := range olds {
 		if x.PersistentVolumeClaim != nil {
 			continue
 		}
-		new = append(new, x)
+		news = append(news, x)
 	}
-	return new
+	return news
 }
 
 func filterVolumeMounts(vlms []v1.Volume, vms []v1.VolumeMount) (newVms []v1.VolumeMount) {

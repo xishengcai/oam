@@ -9,16 +9,12 @@ import (
 
 var _ discoverymapper.DiscoveryMapper = &DiscoveryMapper{}
 
-// nolint
 type GetMapper func() (meta.RESTMapper, error)
 
-// nolint
 type Refresh func() (meta.RESTMapper, error)
 
-// nolint
 type RESTMapping func(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error)
 
-// nolint
 type KindsFor func(input schema.GroupVersionResource) ([]schema.GroupVersionKind, error)
 
 // NewMockDiscoveryMapper for unit test only

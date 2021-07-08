@@ -72,7 +72,6 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 				"kind", resource.GetKind(),
 				"name", resource.GetName(),
 				"namespace", resource.GetNamespace())
-
 		}
 	}
 	// delete pvc that create by volumeTrait
@@ -85,7 +84,6 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 		c.Logger.Info("remove pvc success",
 			"volumeTrait", object.GetName(),
 			"pvcName", resource.Name)
-
 	}
 	return nil
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/xishengcai/oam/pkg/oam/util"
 	"k8s.io/api/autoscaling/v2beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/scale/scheme/autoscalingv1"
@@ -29,12 +28,12 @@ const (
 )
 
 var (
-	appsAPIVersion  = appsv1.SchemeGroupVersion.String()
 	groupVersionHPA = v2beta1.SchemeGroupVersion.String()
 )
 
 // renderHPA render hpaTrait to kubernetes resource hpa
-func (r *Reconciler) renderHPA(t *oamv1alpha2.HorizontalPodAutoscalerTrait, resources []*unstructured.Unstructured) ([]*v2beta1.HorizontalPodAutoscaler, error) {
+func (r *Reconciler) renderHPA(t *oamv1alpha2.HorizontalPodAutoscalerTrait, resources []*unstructured.Unstructured) (
+	[]*v2beta1.HorizontalPodAutoscaler, error) {
 	hpas := make([]*v2beta1.HorizontalPodAutoscaler, 0)
 	for _, res := range resources {
 		scaleTargetRef, isValidResource, err := renderReference(res)
@@ -96,6 +95,11 @@ func (r *Reconciler) cleanUpLegacyHPAs(ctx context.Context, hpaTrait *oamv1alpha
 func renderReference(resource *unstructured.Unstructured) (r v2beta1.CrossVersionObjectReference, isValidResource bool, err error) {
 	resGVK := resource.GetObjectKind().GroupVersionKind().String()
 	isValidResource = false
+	r = v2beta1.CrossVersionObjectReference{
+		Kind:       resource.GetKind(),
+		Name:       resource.GetName(),
+		APIVersion: resource.GetAPIVersion(),
+	}
 
 	switch resGVK {
 	case gvkDeployment:
@@ -114,12 +118,6 @@ func renderReference(resource *unstructured.Unstructured) (r v2beta1.CrossVersio
 				return r, isValidResource, fmt.Errorf("cannot get container.resources.requests from deployment: %s", deploy.GetName())
 			}
 		}
-		isValidResource = true
-		r = v2beta1.CrossVersionObjectReference{
-			Kind:       util.KindDeployment,
-			Name:       deploy.GetName(),
-			APIVersion: appsAPIVersion,
-		}
 	case gvkStatefulSet:
 		var sts appsv1.StatefulSet
 		bts, _ := json.Marshal(resource)
@@ -132,15 +130,8 @@ func renderReference(resource *unstructured.Unstructured) (r v2beta1.CrossVersio
 				return r, isValidResource, fmt.Errorf("cannot get container.resources.requests from statefulset: %s", sts.GetName())
 			}
 		}
-		isValidResource = true
-		r = v2beta1.CrossVersionObjectReference{
-			Kind:       util.KindStatefulSet,
-			Name:       sts.GetName(),
-			APIVersion: appsAPIVersion,
-		}
-	default:
-		isValidResource = false
 	}
 
+	isValidResource = true
 	return r, isValidResource, nil
 }
