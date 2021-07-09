@@ -3,7 +3,6 @@ package volumetrait
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
@@ -11,6 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
@@ -20,7 +20,6 @@ type VolumeHandler struct {
 	ClientSet  *kubernetes.Clientset
 	Client     client.Client
 	AppsClient clientappv1.AppsV1Interface
-	Logger     logr.Logger
 	dm         discoverymapper.DiscoveryMapper
 }
 
@@ -33,7 +32,7 @@ func (c *VolumeHandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingIn
 // Delete implements EventHandler
 func (c *VolumeHandler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	if err := c.removeVolumes(evt.Meta); err != nil {
-		c.Logger.Info("remove pvc failed", "volumeTrait", evt.Meta.GetName())
+		klog.Info("remove pvc failed", "volumeTrait", evt.Meta.GetName())
 	}
 }
 
@@ -51,13 +50,13 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 	}
 	ctx := context.Background()
 	// Fetch the workload instance this trait is referring to
-	workload, err := util.FetchWorkload(ctx, c.Client, c.Logger, volumeTrait)
+	workload, err := util.FetchWorkload(ctx, c.Client, volumeTrait)
 	if err != nil {
 		return err
 	}
 
 	// Fetch the child resources list from the corresponding workload
-	resources, err := util.FetchWorkloadChildResources(ctx, c.Logger, c.Client, c.dm, workload)
+	resources, err := util.FetchWorkloadChildResources(ctx, c.Client, c.dm, workload)
 	if err != nil {
 		return err
 	}
@@ -68,7 +67,7 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 			if err != nil {
 				return err
 			}
-			c.Logger.Info("volumeTrait deleted, and delete mountResource",
+			klog.InfoS("volumeTrait deleted, and delete mountResource",
 				"kind", resource.GetKind(),
 				"name", resource.GetName(),
 				"namespace", resource.GetNamespace())
@@ -81,7 +80,7 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 		if err != nil {
 			return err
 		}
-		c.Logger.Info("remove pvc success",
+		klog.Info("remove pvc success",
 			"volumeTrait", object.GetName(),
 			"pvcName", resource.Name)
 	}

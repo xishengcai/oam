@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	cpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
@@ -38,13 +38,13 @@ import (
 
 // Reconcile error strings.
 const (
-	errMountVolume = "cannot scale the resource"
+	errMountVolume = "cannot mount volume"
 	errApplyPVC    = "cannot apply the pvc"
 	waitTime       = time.Second * 60
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager, _ controller.Args, _ logging.Logger) error {
+func Setup(mgr ctrl.Manager, _ controller.Args) error {
 	name := "oam/" + strings.ToLower(oamv1alpha2.VolumeTraitKind)
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
@@ -56,7 +56,6 @@ func Setup(mgr ctrl.Manager, _ controller.Args, _ logging.Logger) error {
 		clientSet:       clientSet,
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
-		log:             ctrl.Log.WithName("VolumeTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeTrait")),
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
@@ -69,7 +68,6 @@ func Setup(mgr ctrl.Manager, _ controller.Args, _ logging.Logger) error {
 		Watches(&source.Kind{Type: &oamv1alpha2.VolumeTrait{}}, &VolumeHandler{
 			ClientSet:  r.clientSet,
 			Client:     mgr.GetClient(),
-			Logger:     ctrl.Log.WithName("VolumeHandler"),
 			dm:         r.dm,
 			AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
 		}).
@@ -82,7 +80,6 @@ type Reconcile struct {
 	client.Client
 	discovery.DiscoveryClient
 	dm     discoverymapper.DiscoveryMapper
-	log    logr.Logger
 	record event.Recorder
 	Scheme *runtime.Scheme
 }
@@ -98,9 +95,8 @@ type Reconcile struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	mLog := r.log.WithValues("namespacedName", req.NamespacedName)
 
-	mLog.Info("Reconcile volume trait")
+	klog.Info("Reconcile volume trait")
 
 	var volumeTrait oamv1alpha2.VolumeTrait
 	if err := r.Get(ctx, req.NamespacedName, &volumeTrait); err != nil {
@@ -111,28 +107,28 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &volumeTrait)
 	if eventObj == nil {
 		// fallback to workload itself
-		mLog.Error(err, "Failed to find the parent resource", "volumeTrait", volumeTrait.Name)
+		klog.ErrorS(err, "Failed to find the parent resource", "volumeTrait", volumeTrait.Name)
 		eventObj = &volumeTrait
 	}
 
 	// Fetch the workload instance this trait is referring to
-	workload, err := util.FetchWorkload(ctx, r, mLog, &volumeTrait)
+	workload, err := util.FetchWorkload(ctx, r, &volumeTrait)
 	if err != nil {
 		r.record.Event(eventObj, event.Warning(util.ErrLocateWorkload, err))
 		return util.ReconcileWaitResult, util.PatchCondition(
 			ctx, r, &volumeTrait, cpv1alpha1.ReconcileError(errors.Wrap(err, util.ErrLocateWorkload)))
 	}
 
-	mLog.V(4).Info("workload-name", workload.GetName(), "workload-uid", workload.GetUID())
+	klog.V(1).Info("workload-name", workload.GetName(), "workload-uid", workload.GetUID())
 	// Fetch the child resources list from the corresponding workload
-	resources, err := util.FetchWorkloadChildResources(ctx, mLog, r, r.dm, workload)
+	resources, err := util.FetchWorkloadChildResources(ctx, r, r.dm, workload)
 	if err != nil {
-		mLog.Error(err, "Error while fetching the workload child resources", "workload", workload.UnstructuredContent())
+		klog.ErrorS(err, "Error while fetching the workload child resources", "workload", workload.UnstructuredContent())
 		r.record.Event(eventObj, event.Warning(util.ErrFetchChildResources, err))
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &volumeTrait,
 			cpv1alpha1.ReconcileError(fmt.Errorf(util.ErrFetchChildResources)))
 	}
-	result, err := r.mountVolume(ctx, mLog, &volumeTrait, resources)
+	result, err := r.mountVolume(ctx, &volumeTrait, resources)
 	if err != nil {
 		r.record.Event(eventObj, event.Warning(errMountVolume, err))
 		return result, err
@@ -146,8 +142,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 }
 
 // mountVolume find child resources and add mount volume
-func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
-	volumeTrait *oamv1alpha2.VolumeTrait, resources []*unstructured.Unstructured) (ctrl.Result, error) {
+func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.VolumeTrait, resources []*unstructured.Unstructured) (ctrl.Result, error) {
 	isController := false
 	bod := true
 	var statusResources []cpv1alpha1.TypedReference
@@ -155,7 +150,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 	// find the resource object to record the event to, default is the parent appConfig.
 	appConfig, err := util.LocateParentAppConfig(ctx, r.Client, volumeTrait)
 	if appConfig == nil {
-		mLog.Error(err, "Failed to find the parent resource", "volumeTrait", volumeTrait.Name)
+		klog.ErrorS(err, "Failed to find the parent resource", "volumeTrait", volumeTrait.Name)
 		appConfig = volumeTrait
 	}
 
@@ -251,7 +246,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 				if apierrors.IsNotFound(err) {
 					pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
 					if err != nil {
-						mLog.Error(err, "Create pvc failed", "pvcName", pvc.Name)
+						klog.ErrorS(err, "Create pvc failed", "pvcName", pvc.Name)
 						return util.ReconcileWaitResult, err
 					}
 				}
@@ -272,23 +267,23 @@ func (r *Reconcile) mountVolume(ctx context.Context, mLog logr.Logger,
 
 		// merge patch to modify the resource
 		if err := r.Patch(ctx, res, resPatch, client.FieldOwner(volumeTrait.GetUID())); err != nil {
-			mLog.Error(err, "Failed to mount volume a resource")
+			klog.ErrorS(err, "Failed to mount volume a resource")
 			return util.ReconcileWaitResult, err
 		}
 
 		if err := r.cleanupResources(ctx, volumeTrait, pvcNameList); err != nil {
-			mLog.Error(err, "Failed to clean up resources")
+			klog.ErrorS(err, "Failed to clean up resources")
 			r.record.Event(appConfig, event.Warning(errApplyPVC, err))
 			return util.ReconcileWaitResult, err
 		}
-		mLog.Info("Successfully patch a resource", "resource GVK", res.GroupVersionKind().String(),
+		klog.InfoS("Successfully patch a resource", "resource GVK", res.GroupVersionKind().String(),
 			"res UID", res.GetUID(), "target volumeClaimTemplates", volumeTrait.Spec.VolumeList)
 	}
 
 	volumeTrait.Status.Resources = statusResources
 	volumeTraitPatch := client.MergeFrom(volumeTrait.DeepCopyObject())
 	if err := r.Status().Patch(ctx, volumeTrait, volumeTraitPatch); err != nil {
-		mLog.Error(err, "failed to update volumeTrait")
+		klog.ErrorS(err, "failed to update volumeTrait")
 		return util.ReconcileWaitResult, err
 	}
 

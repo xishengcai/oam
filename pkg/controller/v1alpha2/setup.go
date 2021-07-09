@@ -22,8 +22,6 @@ import (
 	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/traits/volumetrait"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/controller/v1alpha2/applicationconfiguration"
 	"github.com/xishengcai/oam/pkg/controller/v1alpha2/core/scopes/healthscope"
@@ -32,8 +30,8 @@ import (
 )
 
 // Setup workload controllers.
-func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
-	for _, setup := range []func(ctrl.Manager, controller.Args, logging.Logger) error{
+func Setup(mgr ctrl.Manager, args controller.Args) error {
+	for _, setup := range []func(ctrl.Manager, controller.Args) error{
 		applicationconfiguration.Setup,
 		containerizedworkload.Setup,
 		manualscalertrait.Setup,
@@ -42,7 +40,7 @@ func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
 		volumetrait.Setup,
 		canarytrait.Setup,
 	} {
-		if err := setup(mgr, args, l); err != nil {
+		if err := setup(mgr, args); err != nil {
 			return err
 		}
 	}

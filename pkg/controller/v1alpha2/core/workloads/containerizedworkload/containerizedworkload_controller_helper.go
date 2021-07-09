@@ -3,6 +3,8 @@ package containerizedworkload
 import (
 	"context"
 
+	"k8s.io/klog/v2"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,7 +37,6 @@ func (r *Reconciler) renderChildResource(workload *v1alpha2.ContainerizedWorkloa
 // delete childResource that are not the same as the existing
 func (r *Reconciler) cleanupResources(ctx context.Context, workload *v1alpha2.ContainerizedWorkload,
 	childResourceKind string, childResourceUID types.UID) error {
-	log := r.log.WithValues("gc childResource", workload.Name)
 	for _, res := range workload.Status.Resources {
 		// if res.Kind == childResourceKind && res.APIVersion == appsv1.SchemeGroupVersion.String() {
 		if res.Kind == childResourceKind {
@@ -53,7 +54,7 @@ func (r *Reconciler) cleanupResources(ctx context.Context, workload *v1alpha2.Co
 				if err := r.Delete(ctx, obj); err != nil {
 					return err
 				}
-				log.Info("gc containerizedWorkload childResource, Removed an orphaned: ", res.Kind, ",orphaned UID: ", res.UID)
+				klog.InfoS("gc containerizedWorkload childResource, Removed an orphaned: ", res.Kind, ",orphaned UID: ", res.UID)
 			}
 		}
 	}
