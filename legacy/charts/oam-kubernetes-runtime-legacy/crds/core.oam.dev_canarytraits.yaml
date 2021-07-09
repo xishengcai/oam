@@ -40,6 +40,7 @@ spec:
                 type: string
               type: object
             proportion:
+              description: 'Proportion 灰度发布流量比例, range: 0-100'
               format: int32
               type: integer
             type:

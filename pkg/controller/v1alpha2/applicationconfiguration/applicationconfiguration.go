@@ -126,20 +126,6 @@ func WithRecorder(er event.Recorder) ReconcilerOption {
 	}
 }
 
-// WithPrehook register a pre-hook to the Reconciler
-func WithPrehook(name string, hook ControllerHooks) ReconcilerOption {
-	return func(r *OAMApplicationReconciler) {
-		r.preHooks[name] = hook
-	}
-}
-
-// WithPosthook register a post-hook to the Reconciler
-func WithPosthook(name string, hook ControllerHooks) ReconcilerOption {
-	return func(r *OAMApplicationReconciler) {
-		r.postHooks[name] = hook
-	}
-}
-
 // WithApplyOnceOnly indicates whether workloads and traits should be
 // affected if no spec change is made in the ApplicationConfiguration.
 func WithApplyOnceOnly(applyOnceOnly bool) ReconcilerOption {
@@ -251,7 +237,7 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 
 	workloads, depStatus, err := r.components.Render(ctx, ac)
 	if err != nil {
-		klog.InfoS("Cannot render components", "error", err, "requeue-after", time.Now().Add(shortWait))
+		klog.ErrorS(err, "Cannot render components", "requeue-after", time.Now().Add(shortWait))
 		r.record.Event(ac, event.Warning(reasonCannotRenderComponents, err))
 		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errRenderComponents)))
 		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)

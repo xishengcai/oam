@@ -78,6 +78,7 @@ spec:
                             type: object
                           path:
                             description: Path within the container at which the configuration file should be written.
+                            pattern: ^/.*[^/ ]$
                             type: string
                           subPath:
                             description: Path within the volume from which the container's volume should be mounted. Defaults to "" (volume's root).
