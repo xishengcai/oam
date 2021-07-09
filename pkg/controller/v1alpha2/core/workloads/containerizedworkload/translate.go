@@ -23,6 +23,7 @@ import (
 	"hash/fnv"
 	"path"
 	"reflect"
+	"strings"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam"
@@ -167,7 +168,7 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 }
 
 func translateConfigFileToVolume(cf v1alpha2.ContainerConfigFile, wlName, containerName string) (v corev1.Volume, vm corev1.VolumeMount) {
-	mountPath, fileName := path.Split(cf.Path)
+	mountPath, fileName := path.Split(strings.TrimSpace(cf.Path))
 	// translate into ConfigMap Volume
 	if cf.Value != nil {
 		name, _ := generateConfigMapName(mountPath, wlName, containerName)
@@ -244,7 +245,9 @@ func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.Co
 			if cf.Value == nil {
 				continue
 			}
-			mountPath, key := path.Split(cf.Path)
+
+			// TODO: need remove trimSpace
+			mountPath, key := path.Split(strings.TrimSpace(cf.Path))
 			cmName, err := generateConfigMapName(mountPath, cw.GetName(), c.Name)
 			if err != nil {
 				return nil, err

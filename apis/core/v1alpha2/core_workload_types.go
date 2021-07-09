@@ -25,16 +25,10 @@ import (
 	"github.com/xishengcai/oam/pkg/oam"
 )
 
-// An OperatingSystem required by a containerised workload.
+// OperatingSystem required by a containerised workload.
 type OperatingSystem string
 
-// Supported operating system types.
-const (
-	OperatingSystemLinux   OperatingSystem = "linux"
-	OperatingSystemWindows OperatingSystem = "windows"
-)
-
-// A CPUArchitecture required by a containerised workload.
+// CPUArchitecture required by a containerised workload.
 type CPUArchitecture string
 
 // Supported architectures
@@ -183,16 +177,15 @@ type ContainerEnvVar struct {
 // A ContainerConfigFile specifies a configuration file that should be written
 // within a container.
 type ContainerConfigFile struct {
-	// Path within the container at which the configuration file should be
-	// written.
+	// Path within the container at which the configuration file should be written.
+	// +kubebuilder:validation:Pattern=^/.*[^/ ]$
 	Path string `json:"path"`
 
 	// Value that should be written to the configuration file.
 	Value *string `json:"value"`
 
 	// FromSecret is a secret key reference which can be used to assign a value
-	// to be written to the configuration file at the given path in the
-	// container.
+	// to be written to the configuration file at the given path in the container.
 	// +optional
 	FromSecret *SecretKeySelector `json:"fromSecret,omitempty"`
 

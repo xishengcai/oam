@@ -103,8 +103,7 @@ func (r *Reconciler) renderService(ctx context.Context,
 }
 
 // create ConfigMaps for ContainerConfigFiles
-func (r *Reconciler) renderConfigMaps(ctx context.Context,
-	workload *v1alpha2.ContainerizedWorkload) (map[string]*corev1.ConfigMap, error) {
+func (r *Reconciler) renderConfigMaps(ctx context.Context, workload *v1alpha2.ContainerizedWorkload) (map[string]*corev1.ConfigMap, error) {
 	configMaps, err := TranslateConfigMaps(ctx, workload)
 	if err != nil {
 		return nil, err
