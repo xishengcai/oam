@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -34,7 +36,6 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
@@ -43,8 +44,7 @@ import (
 	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
-
-	"github.com/oam-dev/kubevela/pkg/utils/apply"
+	"github.com/xishengcai/oam/util/apply"
 )
 
 const (
@@ -81,7 +81,7 @@ const (
 )
 
 // Setup adds a controller that reconciles ApplicationConfigurations.
-func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
+func Setup(mgr ctrl.Manager, args controller.Args) error {
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
 		return err
@@ -93,11 +93,9 @@ func Setup(mgr ctrl.Manager, args controller.Args, l logging.Logger) error {
 		For(&v1alpha2.ApplicationConfiguration{}).
 		Watches(&source.Kind{Type: &v1alpha2.Component{}}, &ComponentHandler{
 			Client:        mgr.GetClient(),
-			Logger:        l,
 			RevisionLimit: args.RevisionLimit,
 		}).
 		Complete(NewReconciler(mgr, dm,
-			WithLogger(l.WithValues("controller", name)),
 			WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 			WithApplyOnceOnly(args.ApplyOnceOnly),
 			WithSetSync(args.SyncTime)))
@@ -111,7 +109,6 @@ type OAMApplicationReconciler struct {
 	workloads     WorkloadApplicator
 	gc            GarbageCollector
 	scheme        *runtime.Scheme
-	log           logging.Logger
 	record        event.Recorder
 	preHooks      map[string]ControllerHooks
 	postHooks     map[string]ControllerHooks
@@ -121,13 +118,6 @@ type OAMApplicationReconciler struct {
 
 // A ReconcilerOption configures a Reconciler.
 type ReconcilerOption func(*OAMApplicationReconciler)
-
-// WithLogger specifies how the Reconciler should log messages.
-func WithLogger(l logging.Logger) ReconcilerOption {
-	return func(r *OAMApplicationReconciler) {
-		r.log = l
-	}
-}
 
 // WithRecorder specifies how the Reconciler should record events.
 func WithRecorder(er event.Recorder) ReconcilerOption {
@@ -168,7 +158,6 @@ func WithSetSync(syncTime time.Duration) ReconcilerOption {
 // NewReconciler returns an OAMApplicationReconciler that reconciles ApplicationConfigurations
 // by rendering and instantiating their Components and Traits.
 func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...ReconcilerOption) *OAMApplicationReconciler {
-	l := logging.NewNopLogger()
 	r := &OAMApplicationReconciler{
 		client: m.GetClient(),
 		scheme: m.GetScheme(),
@@ -181,12 +170,11 @@ func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...Reco
 		},
 
 		gc:        GarbageCollectorFn(eligible),
-		log:       l,
 		record:    event.NewNopRecorder(),
 		preHooks:  make(map[string]ControllerHooks),
 		postHooks: make(map[string]ControllerHooks),
 		workloads: &workloads{
-			applicator: apply.NewAPIApplicator(m.GetClient(), l),
+			applicator: apply.NewAPIApplicator(m.GetClient()),
 			rawClient:  m.GetClient(),
 			dm:         dm,
 		},
@@ -205,9 +193,6 @@ func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...Reco
 // controller level. We assume this will be done by validating admission
 // webhooks.
 func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reconcile.Result, returnErr error) {
-	log := r.log.WithValues("request", req)
-	log.Debug("Reconciling")
-
 	ctx, cancel := context.WithTimeout(context.Background(), reconcileTimeout)
 	defer cancel()
 
@@ -219,13 +204,12 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 
 	if ac.ObjectMeta.DeletionTimestamp.IsZero() {
 		if registerFinalizers(ac) {
-			log.Debug("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
+			klog.Info("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
 			return reconcile.Result{}, errors.Wrap(r.client.Update(ctx, ac), errUpdateAppConfigStatus)
 		}
 	} else {
 		if err := r.workloads.Finalize(ctx, ac); err != nil {
-			log.Debug("Failed to finalize workloads", "workloads status", ac.Status.Workloads,
-				"error", err, "requeue-after", result.RequeueAfter)
+			klog.ErrorS(err, "Failed to finalize workloads", "workloads status", ac.Status.Workloads, "requeue-after", result.RequeueAfter)
 			r.record.Event(ac, event.Warning(reasonCannotFinalizeWorkloads, err))
 			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errFinalizeWorkloads)))
 			return reconcile.Result{}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
@@ -237,9 +221,9 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	defer func() {
 		updateObservedGeneration(ac)
 		for name, hook := range r.postHooks {
-			exeResult, err := hook.Exec(ctx, ac, log)
+			exeResult, err := hook.Exec(ctx, ac)
 			if err != nil {
-				log.Debug("Failed to execute post-hooks", "hook name", name, "error", err, "requeue-after", result.RequeueAfter)
+				klog.ErrorS(err, "Failed to execute post-hooks", "hook name", name, "requeue-after", result.RequeueAfter)
 				r.record.Event(ac, event.Warning(reasonCannotExecutePosthooks, err))
 				ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePosthooks)))
 				result = exeResult
@@ -253,9 +237,9 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 
 	// execute the prehooks
 	for name, hook := range r.preHooks {
-		result, err := hook.Exec(ctx, ac, log)
+		result, err := hook.Exec(ctx, ac)
 		if err != nil {
-			log.Debug("Failed to execute pre-hooks", "hook name", name, "error", err)
+			klog.ErrorS(err, "Failed to execute pre-hooks", "hook name", name)
 			r.record.Event(ac, event.Warning(reasonCannotExecutePrehooks, err))
 			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePrehooks)))
 			return result, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
@@ -263,16 +247,16 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		r.record.Event(ac, event.Normal(reasonExecutePrehook, "Successfully executed a prehook", "prehook name ", name))
 	}
 
-	log = log.WithValues("uid", ac.GetUID(), "version", ac.GetResourceVersion())
+	//log = log.WithValues("uid", ac.GetUID(), "version", ac.GetResourceVersion())
 
 	workloads, depStatus, err := r.components.Render(ctx, ac)
 	if err != nil {
-		log.Info("Cannot render components", "error", err, "requeue-after", time.Now().Add(shortWait))
+		klog.InfoS("Cannot render components", "error", err, "requeue-after", time.Now().Add(shortWait))
 		r.record.Event(ac, event.Warning(reasonCannotRenderComponents, err))
 		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errRenderComponents)))
 		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
 	}
-	log.Debug("Successfully rendered components", "workloads", len(workloads))
+	klog.V(1).InfoS("Successfully rendered components", "workloads", len(workloads))
 	r.record.Event(ac, event.Normal(reasonRenderComponents, "Successfully rendered components", "workloads", strconv.Itoa(len(workloads))))
 
 	applyOpts := []apply.ApplyOption{apply.MustBeControllableBy(ac.GetUID())}
@@ -280,12 +264,12 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		applyOpts = append(applyOpts, applyOnceOnly())
 	}
 	if err := r.workloads.Apply(ctx, ac.Status.Workloads, workloads, applyOpts...); err != nil {
-		log.Debug("Cannot apply components", "error", err, "requeue-after", time.Now().Add(shortWait))
+		klog.ErrorS(err, "Cannot apply components", "requeue-after", time.Now().Add(shortWait))
 		r.record.Event(ac, event.Warning(reasonCannotApplyComponents, err))
 		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errApplyComponents)))
 		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
 	}
-	log.Debug("Successfully applied components", "workloads", len(workloads))
+	klog.InfoS("Successfully applied components", "workloads", len(workloads))
 	r.record.Event(ac, event.Normal(reasonApplyComponents, "Successfully applied components", "workloads", strconv.Itoa(len(workloads))))
 
 	// Kubernetes garbage collection will (by default) reap workloads and traits
@@ -296,16 +280,16 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
 		e := e
 
-		log = log.WithValues("kind", e.GetKind(), "name", e.GetName())
+		//log = log.WithValues("kind", e.GetKind(), "name", e.GetName())
 		record := r.record.WithAnnotations("kind", e.GetKind(), "name", e.GetName())
 
 		if err := r.client.Delete(ctx, &e); resource.IgnoreNotFound(err) != nil {
-			log.Debug("Cannot garbage collect component", "error", err, "requeue-after", time.Now().Add(shortWait))
+			klog.ErrorS(err, "Cannot garbage collect component", "requeue-after", time.Now().Add(shortWait))
 			record.Event(ac, event.Warning(reasonCannotGGComponents, err))
 			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errGCComponent)))
 			return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
 		}
-		log.Debug("Garbage collected resource")
+		klog.InfoS("Garbage collected resource")
 		record.Event(ac, event.Normal(reasonGGComponent, "Successfully garbage collected component"))
 	}
 

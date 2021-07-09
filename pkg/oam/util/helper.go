@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -36,22 +37,30 @@ import (
 var (
 	// KindDeployment is the k8s Deployment kind.
 	KindDeployment = reflect.TypeOf(appsv1.Deployment{}).Name()
+
 	// KindService is the k8s Service kind.
 	KindService = reflect.TypeOf(corev1.Service{}).Name()
+
 	// KindStatefulSet is the k8s StatefulSet kind
 	KindStatefulSet = reflect.TypeOf(appsv1.StatefulSet{}).Name()
 	// KindVolumeTrait is the k8s VolumeTrait kind
 	KindVolumeTrait = reflect.TypeOf(v1alpha2.VolumeTrait{}).Name()
+
 	// KindPersistentVolumeClaim is the k8s PersistentVolumeClaim kind
 	KindPersistentVolumeClaim = reflect.TypeOf(corev1.PersistentVolumeClaim{}).Name()
+
 	// ReconcileWaitResult is the time to wait between reconciliation.
 	ReconcileWaitResult = reconcile.Result{RequeueAfter: 30 * time.Second}
+
 	// KindConfigMap is the k8s Deployment kind.
 	KindConfigMap = reflect.TypeOf(corev1.ConfigMap{}).Name()
+
 	// LabelKeyChildResource us containerized workload child resource
 	LabelKeyChildResource = "app.oam.dev/childResource"
+
 	// LabelAppID istio app must has this label key
 	LabelAppID = "oam.runtime.app.id"
+
 	// LabelComponentID launcher.app must has it
 	LabelComponentID = "oam.runtime.component.id"
 )
@@ -118,22 +127,22 @@ func LocateParentAppConfig(ctx context.Context, client client.Client, oamObject 
 }
 
 // FetchWorkload fetch the workload that a trait refers to
-func FetchWorkload(ctx context.Context, c client.Client, mLog logr.Logger, oamTrait oam.Trait) (*unstructured.Unstructured, error) {
+func FetchWorkload(ctx context.Context, c client.Client, oamTrait oam.Trait) (*unstructured.Unstructured, error) {
 	var workload unstructured.Unstructured
 	workloadRef := oamTrait.GetWorkloadReference()
 	if workloadRef.Kind == "" || workloadRef.APIVersion == "" || workloadRef.Name == "" {
 		err := errors.New("no workload reference")
-		mLog.Error(err, ErrLocateWorkload)
+		klog.ErrorS(err, ErrLocateWorkload)
 		return nil, err
 	}
 	workload.SetAPIVersion(workloadRef.APIVersion)
 	workload.SetKind(workloadRef.Kind)
 	wn := client.ObjectKey{Name: workloadRef.Name, Namespace: oamTrait.GetNamespace()}
 	if err := c.Get(ctx, wn, &workload); err != nil && !apierrors.IsNotFound(err) {
-		mLog.Error(err, "Workload not find", "kind", workloadRef.Kind, "workload name", workloadRef.Name)
+		klog.ErrorS(err, "Workload not find", "kind", workloadRef.Kind, "workload name", workloadRef.Name)
 		return nil, err
 	}
-	mLog.Info("Get the workload the trait is pointing to", "workload name", workload.GetName(),
+	klog.InfoS("Get the workload the trait is pointing to", "workload name", workload.GetName(),
 		"workload APIVersion", workload.GetAPIVersion(), "workload Kind", workload.GetKind(), "workload UID",
 		workload.GetUID())
 	return &workload, nil
@@ -228,7 +237,7 @@ func GenNamespacedDefinitionName(dn string) types.NamespacedName {
 }
 
 // FetchWorkloadChildResources fetch corresponding child resources given a workload
-func FetchWorkloadChildResources(ctx context.Context, mLog logr.Logger, r client.Reader,
+func FetchWorkloadChildResources(ctx context.Context, r client.Reader,
 	dm discoverymapper.DiscoveryMapper, workload *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
 	// Fetch the corresponding workloadDefinition CR
 	workloadDefinition, err := FetchWorkloadDefinition(ctx, r, dm, workload)
@@ -239,10 +248,10 @@ func FetchWorkloadChildResources(ctx context.Context, mLog logr.Logger, r client
 		}
 		return nil, err
 	}
-	return fetchChildResources(ctx, mLog, r, workload, workloadDefinition.Spec.ChildResourceKinds)
+	return fetchChildResources(ctx, r, workload, workloadDefinition.Spec.ChildResourceKinds)
 }
 
-func fetchChildResources(ctx context.Context, mLog logr.Logger, r client.Reader, workload *unstructured.Unstructured,
+func fetchChildResources(ctx context.Context, r client.Reader, workload *unstructured.Unstructured,
 	crkList []v1alpha2.ChildResourceKind) ([]*unstructured.Unstructured, error) {
 	var childResources []*unstructured.Unstructured
 	// list by each child resource type with namespace and possible label selector
@@ -250,17 +259,17 @@ func fetchChildResources(ctx context.Context, mLog logr.Logger, r client.Reader,
 		crs := unstructured.UnstructuredList{}
 		crs.SetAPIVersion(crk.APIVersion)
 		crs.SetKind(crk.Kind)
-		mLog.V(4).Info("List child resource kind", "APIVersion", crk.APIVersion, "Kind", crk.Kind, "owner UID", workload.GetUID())
+		klog.V(1).InfoS("List child resource kind", "APIVersion", crk.APIVersion, "Kind", crk.Kind, "owner UID", workload.GetUID())
 		if err := r.List(ctx, &crs, client.InNamespace(workload.GetNamespace()),
 			client.MatchingLabels(crk.Selector)); err != nil {
-			mLog.Error(err, "failed to list object", "api version", crs.GetAPIVersion(), "kind", crs.GetKind())
+			klog.ErrorS(err, "failed to list object", "api version", crs.GetAPIVersion(), "kind", crs.GetKind())
 			return nil, err
 		}
 		// pick the ones that is owned by the workload
 		for _, cr := range crs.Items {
 			for _, owner := range cr.GetOwnerReferences() {
 				if owner.UID == workload.GetUID() {
-					mLog.Info("Find a child resource we are looking for",
+					klog.InfoS("Find a child resource we are looking for",
 						"APIVersion", cr.GetAPIVersion(), "Kind", cr.GetKind(),
 						"Name", cr.GetName(), "owner", owner.UID)
 					or := cr // have to do a copy as the range variable is a reference and will change
@@ -273,13 +282,10 @@ func fetchChildResources(ctx context.Context, mLog logr.Logger, r client.Reader,
 }
 
 // PatchCondition condition for a conditioned object
-func PatchCondition(ctx context.Context, r client.StatusClient, workload ConditionedObject,
-	condition ...cpv1alpha1.Condition) error {
+func PatchCondition(ctx context.Context, r client.StatusClient, workload ConditionedObject, condition ...cpv1alpha1.Condition) error {
 	workloadPatch := client.MergeFrom(workload.DeepCopyObject())
 	workload.SetConditions(condition...)
-	return errors.Wrap(
-		r.Status().Patch(ctx, workload, workloadPatch, client.FieldOwner(workload.GetUID())),
-		ErrUpdateStatus)
+	return errors.Wrap(r.Status().Patch(ctx, workload, workloadPatch, client.FieldOwner(workload.GetUID())), ErrUpdateStatus)
 }
 
 // A metaObject is a Kubernetes object that has label and annotation

@@ -21,11 +21,10 @@ import (
 	"reflect"
 	"strings"
 
+	"k8s.io/klog/v2"
+
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/go-logr/logr"
-	"github.com/oam-dev/kubevela/pkg/utils/apply"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +39,7 @@ import (
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/oam/util"
+	"github.com/xishengcai/oam/util/apply"
 )
 
 // Reconcile error strings.
@@ -53,13 +53,12 @@ const (
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
+func Setup(mgr ctrl.Manager, args controller.Args) error {
 	r := Reconciler{
 		Client:     mgr.GetClient(),
-		log:        ctrl.Log.WithName("ContainerizedWorkload"),
 		record:     event.NewAPIRecorder(mgr.GetEventRecorderFor("ContainerizedWorkload")),
 		Scheme:     mgr.GetScheme(),
-		applicator: apply.NewAPIApplicator(mgr.GetClient(), log),
+		applicator: apply.NewAPIApplicator(mgr.GetClient()),
 	}
 	return r.SetupWithManager(mgr)
 }
@@ -67,7 +66,6 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 // Reconciler reconciles a ContainerizedWorkload object
 type Reconciler struct {
 	client.Client
-	log        logr.Logger
 	record     event.Recorder
 	Scheme     *runtime.Scheme
 	applicator apply.Applicator
@@ -81,13 +79,12 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.log.WithValues("containerizedworkload", req.NamespacedName)
-	log.Info("Reconcile container workload")
+	klog.Info("Reconcile container workload")
 
 	var workload v1alpha2.ContainerizedWorkload
 	if err := r.Get(ctx, req.NamespacedName, &workload); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("Container workload is deleted")
+			klog.Info("Container workload is deleted")
 		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -95,7 +92,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// find the resource object to record the event to, default is the parent appConfig.
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &workload)
 	if eventObj == nil {
-		log.Error(err, "LocateParentAppConfig failed", "workloadName", workload.Name)
+		klog.ErrorS(err, "LocateParentAppConfig failed", "workloadName", workload.Name)
 		eventObj = &workload
 	}
 
@@ -106,15 +103,15 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	childObject, err := r.renderChildResource(&workload)
 	if err != nil {
-		log.Error(err, "Failed to render childObject", "name", workload.Name)
+		klog.ErrorS(err, "Failed to render childObject", "name", workload.Name)
 		r.record.Event(eventObj, event.Warning(errRenderWorkload, err))
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderWorkload)))
 	}
 
 	err = r.checkLabelSelect(ctx, &workload, childObject)
-	if err != nil {
-		log.Error(err, "Failed to render childObject", "name", workload.Name)
+	if client.IgnoreNotFound(err) != nil {
+		klog.ErrorS(err, "Failed to render childObject", "name", workload.Name)
 		r.record.Event(eventObj, event.Warning(errRenderWorkload, err))
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderWorkload)))
@@ -124,7 +121,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// server side apply, only the fields we set are touched
 	applyOpts := []apply.ApplyOption{apply.MustBeControllableBy(workload.GetUID())}
 	if err = r.applicator.Apply(ctx, childObject, applyOpts...); err != nil {
-		log.Error(err, "Failed to apply ", childObject.GetObjectKind())
+		klog.ErrorS(err, "Failed to apply ", childObject.GetObjectKind())
 		r.record.Event(eventObj, event.Warning(errApplyChildResource, err))
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyChildResource)))
@@ -150,21 +147,21 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// garbage collect the deployment that we created but not needed
 	if err = r.cleanupResources(ctx, &workload, childWorkloadKindString, uid); err != nil {
-		log.Error(err, "Failed to clean up resources")
+		klog.ErrorS(err, "Failed to clean up resources")
 		r.record.Event(eventObj, event.Warning(errApplyChildResource, err))
 	}
 	// configMap
 	configMapApplyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner(workload.GetUID())}
 	configMaps, err := r.renderConfigMaps(ctx, &workload)
 	if err != nil {
-		log.Error(err, "Failed to render configMap")
+		klog.ErrorS(err, "Failed to render configMap")
 		r.record.Event(eventObj, event.Warning(errRenderWorkload, err))
 		return util.ReconcileWaitResult,
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errRenderWorkload)))
 	}
 	for _, cm := range configMaps {
 		if err = r.Patch(ctx, cm, client.Apply, configMapApplyOpts...); err != nil {
-			log.Error(err, "Failed to apply a configMap")
+			klog.ErrorS(err, "Failed to apply a configMap")
 			r.record.Event(eventObj, event.Warning(errApplyConfigMap, err))
 			return util.ReconcileWaitResult,
 				util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyConfigMap)))
@@ -195,7 +192,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if service != nil {
 		// server side apply the service
 		if err := r.applicator.Apply(ctx, service, applyOpts...); err != nil {
-			log.Error(err, "Failed to apply a service")
+			klog.ErrorS(err, "Failed to apply a service")
 			r.record.Event(eventObj, event.Warning(errApplyService, err))
 			return util.ReconcileWaitResult,
 				util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyService)))
@@ -206,7 +203,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		// garbage collect the service/deployments that we created but not needed
 		if err := r.cleanupResources(ctx, &workload, serviceKind, service.UID); err != nil {
-			log.Error(err, "Failed to clean up resources")
+			klog.ErrorS(err, "Failed to clean up resources")
 			r.record.Event(eventObj, event.Warning(errGcService, err))
 		}
 
@@ -229,9 +226,8 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 // checkLabelSelect compare the child resource label, if not same delete
 // because use canary trait will modify pod select，so must delete old deployment
-// ignore errors
 func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.ContainerizedWorkload, childObject runtime.Object) error {
-	var currentLabels, readerLabels map[string]string
+	var currentLabels, renderLabels map[string]string
 	objectKey := client.ObjectKey{
 		Namespace: workload.Namespace,
 		Name:      workload.Name,
@@ -244,7 +240,7 @@ func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.Co
 		if err != nil {
 			return err
 		}
-		readerLabels = dep.Spec.Selector.MatchLabels
+		renderLabels = dep.Spec.Selector.MatchLabels
 		currentLabels = emptyChild.Spec.Selector.MatchLabels
 	case util.KindStatefulSet:
 		sts := childObject.(*appsv1.StatefulSet)
@@ -253,11 +249,20 @@ func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.Co
 		if err != nil {
 			return err
 		}
-		readerLabels = sts.Spec.Selector.MatchLabels
+		renderLabels = sts.Spec.Selector.MatchLabels
 		currentLabels = emptyChild.Spec.Selector.MatchLabels
 	}
 
-	if !reflect.DeepEqual(currentLabels, readerLabels) {
+	appID, ok := currentLabels[util.LabelAppID]
+	if !ok {
+		return fmt.Errorf("conflict, %v this namespace already has the same workload but does not belong to oam", objectKey)
+	}
+
+	if appID != renderLabels[util.LabelAppID] {
+		return fmt.Errorf("conflict, oam appIdD %s already the same name workload: %s", appID, workload.Name)
+	}
+
+	if !reflect.DeepEqual(currentLabels, renderLabels) {
 		err := r.Client.Delete(ctx, childObject)
 		if err != nil {
 			return err
