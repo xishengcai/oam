@@ -96,6 +96,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 					corev1.ResourceCPU:    container.Resources.CPU.Required,
 					corev1.ResourceMemory: container.Resources.Memory.Required,
 				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    container.Resources.CPU.Required,
+					corev1.ResourceMemory: container.Resources.Memory.Required,
+				},
 			}
 			for _, v := range container.Resources.Volumes {
 				mount := corev1.VolumeMount{
