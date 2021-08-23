@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/resource"
+
 	"k8s.io/klog/v2"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
@@ -18,7 +20,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -182,39 +183,32 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		// 遍历挂载特性中的VolumeList字段
 		for _, item := range volumeTrait.Spec.VolumeList {
 			var volumeMounts []v1.VolumeMount
-			for pathIndex, path := range item.Paths {
+			for _, path := range item.Paths {
 				pvcName := fmt.Sprintf("%s-%d-%s", res.GetName(), item.ContainerIndex, path.Name)
-				volumes = append(volumes, v1.Volume{
-					Name:         pvcName,
-					VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
-				})
 				volumeMount := v1.VolumeMount{
 					Name:      pvcName,
 					MountPath: path.Path,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
-				pvcList = append(pvcList, &v1.PersistentVolumeClaim{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: "v1",
-						Kind:       util.KindPersistentVolumeClaim,
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      pvcName,
-						Namespace: volumeTrait.Namespace,
-					},
-					Spec: v1.PersistentVolumeClaimSpec{
-						// can't use &path.StorageClassName
-						StorageClassName: &item.Paths[pathIndex].StorageClassName,
-						AccessModes: []v1.PersistentVolumeAccessMode{
-							v1.ReadWriteOnce,
-						},
-						Resources: v1.ResourceRequirements{
-							Requests: v1.ResourceList{
-								v1.ResourceStorage: resource.MustParse(path.Size),
+				switch path.Type {
+				case "HostPath":
+					hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
+					volumes = append(volumes, v1.Volume{
+						Name: pvcName,
+						VolumeSource: v1.VolumeSource{
+							HostPath: &v1.HostPathVolumeSource{
+								Path: path.HostPath,
+								Type: &hostPathDirectoryOrCreate,
 							},
 						},
-					},
-				})
+					})
+				default:
+					volumes = append(volumes, v1.Volume{
+						Name:         pvcName,
+						VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
+					})
+					pvcList = append(pvcList, generatePVC(path, pvcName, volumeTrait.Namespace))
+				}
 			}
 			if item.ContainerIndex > len(containers.([]interface{}))-1 {
 				return ctrl.Result{}, fmt.Errorf("container Index out of range")
@@ -222,7 +216,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 			c, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
 			oldVolumeMounts := getVolumeMountsFromContainer(c)
 
-			// 找出非pvc的volumeMounts
+			// 找出非pvc,hostPath 的volumeMounts
 			volumeMounts = append(volumeMounts, getHasPvcVolumeMounts(oldVolumes, oldVolumeMounts)...)
 
 			c["volumeMounts"] = volumeMounts
@@ -316,9 +310,11 @@ func getVolumesFromSpec(spec interface{}) (vls []v1.Volume) {
 	return
 }
 
+// getHasPvcVolumeMounts 找出非pvc,hostPath 的volumeMounts
+//
 func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMounts []v1.VolumeMount) {
 	for _, x := range vls {
-		if x.PersistentVolumeClaim != nil {
+		if x.PersistentVolumeClaim != nil || x.HostPath != nil {
 			continue
 		}
 		for _, j := range vms {
@@ -332,7 +328,7 @@ func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMo
 
 func mergeVolumes(olds, news []v1.Volume) []v1.Volume {
 	for _, x := range olds {
-		if x.PersistentVolumeClaim != nil {
+		if x.PersistentVolumeClaim != nil || x.HostPath != nil {
 			continue
 		}
 		news = append(news, x)
@@ -349,4 +345,29 @@ func filterVolumeMounts(vlms []v1.Volume, vms []v1.VolumeMount) (newVms []v1.Vol
 		}
 	}
 	return
+}
+
+func generatePVC(p oamv1alpha2.PathItem, pvcName, namespace string) *v1.PersistentVolumeClaim {
+	return &v1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       util.KindPersistentVolumeClaim,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: namespace,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			// can't use &path.StorageClassName
+			StorageClassName: &p.StorageClassName,
+			AccessModes: []v1.PersistentVolumeAccessMode{
+				v1.ReadWriteOnce,
+			},
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceStorage: resource.MustParse(p.Size),
+				},
+			},
+		},
+	}
 }
