@@ -178,7 +178,6 @@ type ContainerEnvVar struct {
 // within a container.
 type ContainerConfigFile struct {
 	// Path within the container at which the configuration file should be written.
-	// +kubebuilder:validation:Pattern=^/.*[^/ ]$
 	Path string `json:"path"`
 
 	// Value that should be written to the configuration file.
@@ -215,6 +214,13 @@ type ContainerPort struct {
 	// +kubebuilder:validation:Enum=TCP;UDP
 	// +optional
 	Protocol *TransportProtocol `json:"protocol,omitempty"`
+
+	// Number of port to expose on the host.
+	// If specified, this must be a valid port number, 0 < x < 65536.
+	// If HostNetwork is specified, this must match ContainerPort.
+	// Most containers do not need this.
+	// +optional
+	HostPort int32 `json:"hostPort,omitempty" protobuf:"varint,2,opt,name=hostPort"`
 }
 
 // An ExecProbe probes a container's health by executing a command.

@@ -123,6 +123,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 			} else {
 				port.Protocol = corev1.ProtocolTCP
 			}
+
+			if p.HostPort > 0 && p.HostPort < 65536 {
+				port.HostPort = p.HostPort
+			}
 			kubernetesContainer.Ports = append(kubernetesContainer.Ports, port)
 		}
 

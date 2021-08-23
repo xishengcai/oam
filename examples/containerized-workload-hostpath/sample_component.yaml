@@ -1,0 +1,17 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: oam-component-hostpath
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    metadata:
+      name: oam-component-hostpath
+    spec:
+      containers:
+        - name: grafana
+          image: registry.cn-hangzhou.aliyuncs.com/launcher/grafana:7.2.1
+          ports:
+            - containerPort: 80
+              name: http

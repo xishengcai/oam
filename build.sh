@@ -29,15 +29,15 @@ do
 done
 
 if [ -z "$IMAGE_NAME" ]; then
-  IMAGE_NAME='oam'
+  IMAGE_NAME='lsh-cluster-oam-kubernetes-runtime'
 fi
 
 if [ -z "$VERSION" ]; then
-  VERSION='dev'
+  VERSION='v100r001c02b020'
 fi
 
 if [ -z "$IMAGE_REPO" ]; then
-  IMAGE_REPO='registry.cn-beijing.aliyuncs.com/xlauncher-dev'
+  IMAGE_REPO='registry.cn-beijing.aliyuncs.com/launcher-agent-only-dev'
 fi
 
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build   -o  ./bin/${BIN_FILE} ./main.go
