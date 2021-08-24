@@ -45,19 +45,23 @@ spec:
                       items:
                         description: PathItem define storageClass, size, path, name
                         properties:
+                          hostPath:
+                            type: string
                           name:
                             type: string
                           path:
+                            description: 容器内路径
                             type: string
                           size:
                             type: string
                           storageClassName:
                             type: string
+                          type:
+                            description: type 原则上应该是【枚举，必填】，但是为了向前兼容，不做强制
+                            type: string
                         required:
                         - name
                         - path
-                        - size
-                        - storageClassName
                         type: object
                       type: array
                   required:

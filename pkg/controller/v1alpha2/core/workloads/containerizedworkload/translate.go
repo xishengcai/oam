@@ -23,6 +23,7 @@ import (
 	"hash/fnv"
 	"path"
 	"reflect"
+	"strings"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam"
@@ -95,6 +96,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 					corev1.ResourceCPU:    container.Resources.CPU.Required,
 					corev1.ResourceMemory: container.Resources.Memory.Required,
 				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    container.Resources.CPU.Required,
+					corev1.ResourceMemory: container.Resources.Memory.Required,
+				},
 			}
 			for _, v := range container.Resources.Volumes {
 				mount := corev1.VolumeMount{
@@ -117,6 +122,10 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 				port.Protocol = corev1.Protocol(*p.Protocol)
 			} else {
 				port.Protocol = corev1.ProtocolTCP
+			}
+
+			if p.HostPort > 0 && p.HostPort < 65536 {
+				port.HostPort = p.HostPort
 			}
 			kubernetesContainer.Ports = append(kubernetesContainer.Ports, port)
 		}
@@ -167,7 +176,7 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 }
 
 func translateConfigFileToVolume(cf v1alpha2.ContainerConfigFile, wlName, containerName string) (v corev1.Volume, vm corev1.VolumeMount) {
-	mountPath, fileName := path.Split(cf.Path)
+	mountPath, fileName := path.Split(strings.TrimSpace(cf.Path))
 	// translate into ConfigMap Volume
 	if cf.Value != nil {
 		name, _ := generateConfigMapName(mountPath, wlName, containerName)
@@ -244,7 +253,9 @@ func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.Co
 			if cf.Value == nil {
 				continue
 			}
-			mountPath, key := path.Split(cf.Path)
+
+			// TODO: need remove trimSpace
+			mountPath, key := path.Split(strings.TrimSpace(cf.Path))
 			cmName, err := generateConfigMapName(mountPath, cw.GetName(), c.Name)
 			if err != nil {
 				return nil, err
@@ -411,7 +422,10 @@ func setNodeSelect(cw *v1alpha2.ContainerizedWorkload, d *appsv1.Deployment) {
 	if cw.Spec.NodeSelector != nil && len(*cw.Spec.NodeSelector) > 0 {
 		d.Spec.Template.Spec.NodeSelector = *cw.Spec.NodeSelector
 		d.Spec.Template.Spec.Tolerations = []corev1.Toleration{
-			{Operator: corev1.TolerationOpExists},
+			{
+				Key:    "node-role.kubernetes.io/edge",
+				Effect: corev1.TaintEffectNoExecute,
+			},
 		}
 	} else {
 		d.Spec.Template.Spec.Tolerations = nil

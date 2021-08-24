@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"k8s.io/klog/v2"
+
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,10 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
-	util "github.com/xishengcai/oam/pkg/oam/util"
+	"github.com/xishengcai/oam/pkg/oam/util"
 )
 
 // ControllerRevisionComponentLabel indicate which component the revision belong to
@@ -29,7 +29,6 @@ const ControllerRevisionComponentLabel = "controller.oam.dev/component"
 // ComponentHandler will watch component change and generate Revision automatically.
 type ComponentHandler struct {
 	Client        client.Client
-	Logger        logging.Logger
 	RevisionLimit int
 }
 
@@ -88,7 +87,7 @@ func (c *ComponentHandler) getRelatedAppConfig(object metav1.Object) []reconcile
 	var appConfigs v1alpha2.ApplicationConfigurationList
 	err := c.Client.List(context.Background(), &appConfigs)
 	if err != nil {
-		c.Logger.Info(fmt.Sprintf("error list all applicationConfigurations %v", err))
+		klog.ErrorS(err, "list all applicationConfigurations")
 		return nil
 	}
 	var reqs []reconcile.Request
@@ -111,19 +110,17 @@ func (c *ComponentHandler) IsRevisionDiff(mt metav1.Object, curComp *v1alpha2.Co
 		client.ObjectKey{
 			Namespace: mt.GetNamespace(),
 			Name:      curComp.Status.LatestRevision.Name}, oldRev); err != nil {
-		c.Logger.Info(fmt.Sprintf("get old controllerRevision %s error %v, will create new revision",
-			curComp.Status.LatestRevision.Name, err), "componentName", mt.GetName())
+		klog.Errorf("get old controllerRevision %s error %v, will create new revision, componentName: %s",
+			curComp.Status.LatestRevision.Name, err, mt.GetName())
 		return true, curComp.Status.LatestRevision.Revision
 	}
 	if oldRev.Name == "" {
-		c.Logger.Info(fmt.Sprintf("Not found controllerRevision %s", curComp.Status.LatestRevision.Name),
-			"componentName", mt.GetName())
+		klog.Infof("Not found controllerRevision %s, componentName: %s", curComp.Status.LatestRevision.Name, mt.GetName())
 		return true, curComp.Status.LatestRevision.Revision
 	}
 	oldComp, err := util.UnpackRevisionData(oldRev)
 	if err != nil {
-		c.Logger.Info(fmt.Sprintf("Unmarshal old controllerRevision %s error %v, will create new revision",
-			curComp.Status.LatestRevision.Name, err), "componentName", mt.GetName())
+		klog.Infof("Unmarshal old controllerRevision %s error %v, will create new revision, componentName: %s", curComp.Status.LatestRevision.Name, err, mt.GetName())
 		return true, oldRev.Revision
 	}
 
@@ -181,20 +178,19 @@ func (c *ComponentHandler) createControllerRevision(mt metav1.Object, obj runtim
 
 	err := c.Client.Create(context.TODO(), &revision)
 	if err != nil {
-		c.Logger.Info(fmt.Sprintf("error create controllerRevision %v", err), "componentName", mt.GetName())
+		klog.Errorf("error create controllerRevision %v, componentName: %s", err, mt.GetName())
 		return false
 	}
 
 	err = c.Client.Status().Update(context.Background(), comp)
 	if err != nil {
-		c.Logger.Info(fmt.Sprintf("update component status latestRevision %s err %v", revisionName, err),
-			"componentName", mt.GetName())
+		klog.Infof("update component status latestRevision %s err %v, componentName: %s", revisionName, err, mt.GetName())
 		return false
 	}
-	c.Logger.Info(fmt.Sprintf("ControllerRevision %s created", revisionName))
+	klog.Infof("ControllerRevision %s created", revisionName)
 	if int64(c.RevisionLimit) < nextRevision {
 		if err := c.cleanupControllerRevision(comp); err != nil {
-			c.Logger.Info(fmt.Sprintf("failed to clean up revisions of Component %v.", err))
+			klog.Errorf("failed to clean up revisions of Component %v.", err)
 		}
 	}
 	return true
@@ -266,7 +262,7 @@ func (c *ComponentHandler) cleanupControllerRevision(curComp *v1alpha2.Component
 		if err := c.Client.Delete(context.TODO(), &revisionToClean); err != nil {
 			return err
 		}
-		c.Logger.Info(fmt.Sprintf("ControllerRevision %s deleted", revision.Name))
+		klog.Infof("ControllerRevision %s deleted", revision.Name)
 		toKill--
 	}
 	return nil

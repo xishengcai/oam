@@ -25,16 +25,10 @@ import (
 	"github.com/xishengcai/oam/pkg/oam"
 )
 
-// An OperatingSystem required by a containerised workload.
+// OperatingSystem required by a containerised workload.
 type OperatingSystem string
 
-// Supported operating system types.
-const (
-	OperatingSystemLinux   OperatingSystem = "linux"
-	OperatingSystemWindows OperatingSystem = "windows"
-)
-
-// A CPUArchitecture required by a containerised workload.
+// CPUArchitecture required by a containerised workload.
 type CPUArchitecture string
 
 // Supported architectures
@@ -183,16 +177,14 @@ type ContainerEnvVar struct {
 // A ContainerConfigFile specifies a configuration file that should be written
 // within a container.
 type ContainerConfigFile struct {
-	// Path within the container at which the configuration file should be
-	// written.
+	// Path within the container at which the configuration file should be written.
 	Path string `json:"path"`
 
 	// Value that should be written to the configuration file.
 	Value *string `json:"value"`
 
 	// FromSecret is a secret key reference which can be used to assign a value
-	// to be written to the configuration file at the given path in the
-	// container.
+	// to be written to the configuration file at the given path in the container.
 	// +optional
 	FromSecret *SecretKeySelector `json:"fromSecret,omitempty"`
 
@@ -222,6 +214,13 @@ type ContainerPort struct {
 	// +kubebuilder:validation:Enum=TCP;UDP
 	// +optional
 	Protocol *TransportProtocol `json:"protocol,omitempty"`
+
+	// Number of port to expose on the host.
+	// If specified, this must be a valid port number, 0 < x < 65536.
+	// If HostNetwork is specified, this must match ContainerPort.
+	// Most containers do not need this.
+	// +optional
+	HostPort int32 `json:"hostPort,omitempty" protobuf:"varint,2,opt,name=hostPort"`
 }
 
 // An ExecProbe probes a container's health by executing a command.

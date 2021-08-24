@@ -29,11 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/oam-dev/kubevela/pkg/utils/apply"
-
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
+	"github.com/xishengcai/oam/util/apply"
 )
 
 // Reconcile error strings.
@@ -76,12 +75,9 @@ func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus,
 	for _, wl := range w {
 		if !wl.HasDep {
 			err := a.applicator.Apply(ctx, wl.Workload, ao...)
+			// TODO: ignore err of unchanged
 			if err != nil {
-				if ok := errors.As(err, &GenerationUnchanged{}); !ok {
-					// GenerationUnchanged only aborts applying current workload
-					// but not blocks the whole reconciliation through returning an error
-					return errors.Wrapf(err, errFmtApplyWorkload, wl.Workload.GetName())
-				}
+				return errors.Wrapf(err, errFmtApplyWorkload, wl.Workload.GetName())
 			}
 		}
 		for _, trait := range wl.Traits {
@@ -90,11 +86,8 @@ func (a *workloads) Apply(ctx context.Context, status []v1alpha2.WorkloadStatus,
 			}
 			t := trait.Object
 			if err := a.applicator.Apply(ctx, &trait.Object, ao...); err != nil {
-				if ok := errors.As(err, &GenerationUnchanged{}); !ok {
-					// GenerationUnchanged only aborts applying current trait
-					// but not blocks the whole reconciliation through returning an error
-					return errors.Wrapf(err, errFmtApplyTrait, t.GetAPIVersion(), t.GetKind(), t.GetName())
-				}
+				// TODO: ignore err of unchanged
+				return errors.Wrapf(err, errFmtApplyTrait, t.GetAPIVersion(), t.GetKind(), t.GetName())
 			}
 		}
 		workloadRef := runtimev1alpha1.TypedReference{

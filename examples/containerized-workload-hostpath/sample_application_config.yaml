@@ -1,0 +1,26 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-hostpath
+spec:
+  components:
+    - componentName: oam-component-hostpath
+      traits:
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: VolumeTrait
+            metadata:
+              name: oam-component-hostpath
+            spec:
+              volumeList:
+                - containerIndex: 0
+                  paths:
+                    - path: /var/log/test
+                      hostPath: /data/test
+                      type: HostPath
+                      name: path-1
+                    - size: 20Gi
+                      path: /var/log/test3
+                      storageClassName: local-path
+                      name: path-2
+

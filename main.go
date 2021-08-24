@@ -2,19 +2,15 @@ package main
 
 import (
 	"flag"
-	"io"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 	crdv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/xishengcai/oam/apis/core"
 	"github.com/xishengcai/oam/pkg/controller"
@@ -32,16 +28,13 @@ func setup() {
 }
 
 func main() {
-	var metricsAddr, logFilePath, leaderElectionNamespace string
-	var enableLeaderElection, logCompress bool
-	var logRetainDate int
+	var metricsAddr, leaderElectionNamespace string
+	var enableLeaderElection bool
 	var certDir string
 	var webhookPort int
 	var useWebhook bool
-	var debugLogs bool
 	var controllerArgs = controller.Args{}
 
-	flag.BoolVar(&debugLogs, "debug", true, "Enable the debug logs useful for development")
 	flag.BoolVar(&useWebhook, "use-webhook", false, "Enable Admission Webhook")
 	flag.StringVar(&certDir, "webhook-cert-dir", "/k8s-webhook-server/serving-certs", "Admission webhook cert/key dir.")
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "admission webhook listen address")
@@ -50,9 +43,6 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
 		"Determines the namespace in which the leader election configmap will be created.")
-	flag.StringVar(&logFilePath, "log-file-path", "", "The file to write logs to")
-	flag.IntVar(&logRetainDate, "log-retain-date", 7, "The number of days of logs history to retain.")
-	flag.BoolVar(&logCompress, "log-compress", true, "Enable compression on the rotated logs.")
 	flag.IntVar(&controllerArgs.RevisionLimit, "revision-limit", 50,
 		"RevisionLimit is the maximum number of revisions that will be maintained. The default value is 50.")
 	flag.BoolVar(&controllerArgs.ApplyOnceOnly, "apply-once-only", false,
@@ -63,24 +53,6 @@ func main() {
 	// use set replace init
 	setup()
 
-	// setup logging
-	var w io.Writer
-	if len(logFilePath) > 0 {
-		w = zapcore.AddSync(&lumberjack.Logger{
-			Filename: logFilePath,
-			MaxAge:   logRetainDate, // days
-			Compress: logCompress,
-		})
-	} else {
-		w = os.Stdout
-	}
-
-	ctrl.SetLogger(zap.New(func(o *zap.Options) {
-		o.Development = debugLogs
-		o.DestWritter = w
-	}))
-
-	oamLog := ctrl.Log.WithName("oam-kubernetes-runtime")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                  scheme,
 		MetricsBindAddress:      metricsAddr,
@@ -91,25 +63,25 @@ func main() {
 		CertDir:                 certDir,
 	})
 	if err != nil {
-		oamLog.Error(err, "unable to create a controller manager")
+		klog.Error(err, "unable to create a controller manager")
 		os.Exit(1)
 	}
 
 	if useWebhook {
-		oamLog.Info("OAM webhook enabled, will serving at :" + strconv.Itoa(webhookPort))
+		klog.Infof("OAM webhook enabled, will serving at : %s", strconv.Itoa(webhookPort))
 		if err = webhook.Add(mgr); err != nil {
-			oamLog.Error(err, "unable to setup the webhook for core controller")
+			klog.Error(err, "unable to setup the webhook for core controller")
 			os.Exit(1)
 		}
 	}
 
-	if err = appController.Setup(mgr, controllerArgs, logging.NewLogrLogger(oamLog)); err != nil {
-		oamLog.Error(err, "unable to setup the oam core controller")
+	if err = appController.Setup(mgr, controllerArgs); err != nil {
+		klog.Error("unable to setup the oam core controller", err)
 		os.Exit(1)
 	}
-	oamLog.Info("starting the controller manager")
+	klog.Info("starting the controller manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		oamLog.Error(err, "problem running manager")
+		klog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }

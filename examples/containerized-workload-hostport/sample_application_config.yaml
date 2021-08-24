@@ -1,0 +1,13 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-deploy
+  namespace: default
+spec:
+  components:
+    - componentName: component-dep
+      parameterValues:
+        - name: instance-name
+          value: component-dev1
+        - name: image
+          value: wordpress:php7.2

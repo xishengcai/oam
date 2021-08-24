@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"k8s.io/klog/v2"
+
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/go-logr/logr"
 	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
@@ -23,7 +23,7 @@ import (
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
-func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
+func Setup(mgr ctrl.Manager, args controller.Args) error {
 	dm, err := discoverymapper.New(mgr.GetConfig())
 	if err != nil {
 		return err
@@ -31,7 +31,6 @@ func Setup(mgr ctrl.Manager, args controller.Args, log logging.Logger) error {
 	r := Reconciler{
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
-		log:             ctrl.Log.WithName("CanaryTrait"),
 		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("CanaryTrait")),
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
@@ -46,7 +45,6 @@ type Reconciler struct {
 	discovery.DiscoveryClient
 	dm          discoverymapper.DiscoveryMapper
 	IstioClient *istioclient.Clientset
-	log         logr.Logger
 	record      event.Recorder
 	Scheme      *runtime.Scheme
 }
@@ -68,31 +66,30 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;
 func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	canaryLog := r.log.WithValues("namespacedName", req.NamespacedName)
 
-	canaryLog.Info("Reconcile canaryLogTrait")
+	klog.Info("Reconcile canaryLogTrait")
 
 	var canaryTrait oamv1alpha2.CanaryTrait
 	if err := r.Get(ctx, req.NamespacedName, &canaryTrait); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	canaryLog.Info("Get the canary trait", "Spec: ", canaryTrait.Spec)
+	klog.InfoS("Get the canary trait", "Spec", canaryTrait.Spec)
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &canaryTrait)
 	if eventObj == nil {
-		canaryLog.Error(err, "Failed to find the parent resource", "canaryTrait", canaryTrait.Name)
+		klog.ErrorS(err, "Failed to find the parent resource", "canaryTrait", canaryTrait.Name)
 		return ctrl.Result{}, nil
 	}
 
 	_, err = r.renderDestinationRule(canaryTrait)
 	if err != nil {
-		canaryLog.Error(err, "Error renderDestinationRule", "canary", err)
+		klog.ErrorS(err, "Error renderDestinationRule", "canary", err)
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &canaryTrait,
 			cpv1alpha1.ReconcileError(err))
 	}
 
 	_, err = r.renderVirtualService(canaryTrait)
 	if err != nil {
-		canaryLog.Error(err, "Error renderVirtualService", "canary", err)
+		klog.ErrorS(err, "Error renderVirtualService", "canary", err)
 		return util.ReconcileWaitResult, util.PatchCondition(ctx, r, &canaryTrait,
 			cpv1alpha1.ReconcileError(err))
 	}
