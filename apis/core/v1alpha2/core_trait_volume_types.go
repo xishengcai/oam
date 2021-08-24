@@ -38,10 +38,14 @@ type VolumeMountItem struct {
 }
 
 type PathItem struct {
-	StorageClassName string `json:"storageClassName"`
-	Size             string `json:"size"`
+	StorageClassName string `json:"storageClassName,omitempty"`
+	Size             string `json:"size,omitempty"`
 	Path             string `json:"path"`
 	Name             string `json:"name"`
+
+	// type enum:"HostPath,StorageClass", default is StorageClass.
+	Type     string `json:"type,omitempty"`
+	HostPath string `json:"hostPath,omitempty"`
 }
 
 // A VolumeTraitStatus represents the observed state of a

@@ -223,6 +223,8 @@ type ContainerPort struct {
 	// +kubebuilder:validation:Enum=TCP;UDP
 	// +optional
 	Protocol *TransportProtocol `json:"protocol,omitempty"`
+
+	HostPort int32 `json:"hostPort,omitempty"`
 }
 
 // An ExecProbe probes a container's health by executing a command.
