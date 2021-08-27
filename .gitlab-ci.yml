@@ -2,6 +2,7 @@ stages:
   - build
   - test
   - QualityGate
+  - tapd
 
 job1:
   stage: build
@@ -43,4 +44,25 @@ job3:
     - else
     -     echo "sonarqube失败 http://8.16.0.97:9000"
     -     exit 1
+    - fi
+
+job4:
+  stage: tapd
+  except:
+    - master
+  tags:
+    - LMJ-CI-1
+  script:
+    - TAPD_STATE=`grep -i "tapd_find" /lsh-cicd/ci/configure.conf | awk '{print $3}'`
+    - if [[ ${TAPD_STATE} == open ]]; then
+    - echo ${CI_COMMIT_MESSAGE} | grep -E -o 'sit[(]|st[(]|fix[(]|feat[(]' || echo "未找到缺陷单或需求 "
+    - NAME=`echo ${CI_COMMIT_MESSAGE} | grep -E -o 'sit[(]|st[(]|fix[(]|feat[(]'`
+    - ID_VALUE=`echo ${CI_COMMIT_MESSAGE} | grep -o 'Closes .[0-9]*' | awk -F "#" '{print $2}'`
+    - echo "${NAME}:${ID_VALUE}"
+    - cd /lsh-cicd/ci
+    - if [[ ${NAME} != 'feat(' ]]; then
+    - ./bug_id_find.sh ${ID_VALUE}
+    - else
+    - ./demand_id_find.sh ${ID_VALUE}
+    - fi
     - fi
