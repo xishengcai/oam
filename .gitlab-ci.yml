@@ -31,18 +31,19 @@ job2:
                                       -Dsonar.java.binaries=${CI_PROJECT_DIR} \
                                       -Dsonar.branch.name=${CI_COMMIT_REF_NAME} "
 
+
 job3:
   stage: QualityGate
   tags:
     - LMJ-CI-1
   script:
     - echo ${CI_PROJECT_NAME}
-    - AA=`curl -X GET "http://8.16.0.97:9000/api/measures/search?projectKeys=${CI_PROJECT_NAME}&metricKeys=alert_status" | sed 's/":"/\\n/g' | sed 's/","/\\n/g' | awk 'NR==4 {print}'`
+    - AA=`curl -X GET "http://8.15.0.18:9001/api/measures/search?projectKeys=${CI_PROJECT_NAME}&metricKeys=alert_status" | sed 's/":"/\\n/g' | sed 's/","/\\n/g' | awk 'NR==4 {print}'`
     - echo $AA
     - if [ ${AA} == OK ]; then
     -     echo "sonarqube通过"
     - else
-    -     echo "sonarqube失败 http://8.16.0.97:9000"
+    - echo "sonarqube失败 http://8.15.0.18:9001"
     -     exit 1
     - fi
 
