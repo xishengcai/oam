@@ -144,8 +144,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 // mountVolume find child resources and add mount volume
 func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.VolumeTrait, resources []*unstructured.Unstructured) (ctrl.Result, error) {
-	isController := false
-	bod := true
 	var statusResources []cpv1alpha1.TypedReference
 
 	// find the resource object to record the event to, default is the parent appConfig.
@@ -161,8 +159,8 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		Kind:               volumeTrait.Kind,
 		Name:               volumeTrait.Name,
 		UID:                volumeTrait.UID,
-		Controller:         &isController,
-		BlockOwnerDeletion: &bod,
+		Controller:         newTrue(false),
+		BlockOwnerDeletion: newTrue(true),
 	}
 	for _, res := range resources {
 		if res.GetKind() != util.KindStatefulSet && res.GetKind() != util.KindDeployment {
@@ -207,7 +205,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 						Name:         pvcName,
 						VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
 					})
-					pvcList = append(pvcList, generatePVC(path, pvcName, volumeTrait.Namespace))
+					pvcList = append(pvcList, generatePVC(path, pvcName, volumeTrait))
 				}
 			}
 			if item.ContainerIndex > len(containers.([]interface{}))-1 {
@@ -347,7 +345,7 @@ func filterVolumeMounts(vlms []v1.Volume, vms []v1.VolumeMount) (newVms []v1.Vol
 	return
 }
 
-func generatePVC(p oamv1alpha2.PathItem, pvcName, namespace string) *v1.PersistentVolumeClaim {
+func generatePVC(p oamv1alpha2.PathItem, pvcName string, volumeTrait *oamv1alpha2.VolumeTrait) *v1.PersistentVolumeClaim {
 	return &v1.PersistentVolumeClaim{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -355,7 +353,17 @@ func generatePVC(p oamv1alpha2.PathItem, pvcName, namespace string) *v1.Persiste
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
-			Namespace: namespace,
+			Namespace: volumeTrait.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         volumeTrait.APIVersion,
+					Kind:               volumeTrait.Kind,
+					Name:               volumeTrait.Name,
+					UID:                volumeTrait.UID,
+					Controller:         newTrue(false),
+					BlockOwnerDeletion: newTrue(true),
+				},
+			},
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
 			// can't use &path.StorageClassName
@@ -370,4 +378,8 @@ func generatePVC(p oamv1alpha2.PathItem, pvcName, namespace string) *v1.Persiste
 			},
 		},
 	}
+}
+
+func newTrue(b bool) *bool {
+	return &b
 }

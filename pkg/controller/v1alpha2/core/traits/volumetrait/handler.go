@@ -80,9 +80,7 @@ func (c *VolumeHandler) removeVolumes(object metav1.Object) error {
 		if err != nil {
 			return err
 		}
-		klog.Info("remove pvc success",
-			"volumeTrait", object.GetName(),
-			"pvcName", resource.Name)
+		klog.Info("remove pvc success", "volumeTrait", object.GetName(), "pvcName", resource.Name)
 	}
 	return nil
 }
