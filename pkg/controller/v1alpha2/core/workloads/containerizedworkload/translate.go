@@ -90,6 +90,14 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 			ImagePullPolicy: corev1.PullAlways,
 		}
 
+		if container.LivenessProbe != nil {
+			kubernetesContainer.LivenessProbe = container.LivenessProbe
+		}
+
+		if container.ReadinessProbe != nil {
+			kubernetesContainer.ReadinessProbe = container.ReadinessProbe
+		}
+
 		if container.Resources != nil {
 			kubernetesContainer.Resources = corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{

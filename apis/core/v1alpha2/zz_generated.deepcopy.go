@@ -23,6 +23,7 @@ package v1alpha2
 import (
 	"github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"k8s.io/api/autoscaling/v2beta1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -575,12 +576,12 @@ func (in *Container) DeepCopyInto(out *Container) {
 	}
 	if in.LivenessProbe != nil {
 		in, out := &in.LivenessProbe, &out.LivenessProbe
-		*out = new(ContainerHealthProbe)
+		*out = new(v1.Probe)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.ReadinessProbe != nil {
 		in, out := &in.ReadinessProbe, &out.ReadinessProbe
-		*out = new(ContainerHealthProbe)
+		*out = new(v1.Probe)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.ImagePullSecret != nil {
@@ -853,6 +854,11 @@ func (in *ContainerizedWorkloadSpec) DeepCopyInto(out *ContainerizedWorkloadSpec
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.Dependency != nil {
+		in, out := &in.Dependency, &out.Dependency
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 }
 
