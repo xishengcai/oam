@@ -67,8 +67,10 @@ spec:
                           description: FromSecret is a secret key reference which can be used to assign a value to be written to the configuration file at the given path in the container.
                           properties:
                             key:
+                              description: The key to select.
                               type: string
                             name:
+                              description: The name of the secret.
                               type: string
                           required:
                           - key
@@ -76,7 +78,6 @@ spec:
                           type: object
                         path:
                           description: Path within the container at which the configuration file should be written.
-                          pattern: ^/.*[^/ ]$
                           type: string
                         subPath:
                           description: Path within the volume from which the container's volume should be mounted. Defaults to "" (volume's root).
@@ -98,8 +99,10 @@ spec:
                           description: FromSecret is a secret key reference which can be used to assign a value to the environment variable.
                           properties:
                             key:
+                              description: The key to select.
                               type: string
                             name:
+                              description: The name of the secret.
                               type: string
                           required:
                           - key
@@ -126,74 +129,84 @@ spec:
                     description: A LivenessProbe assesses whether this container is alive. Containers that fail liveness probes will be restarted.
                     properties:
                       exec:
-                        description: Exec probes a container's health by executing a command.
+                        description: One and only one of the following should be specified. Exec specifies the action to take.
                         properties:
                           command:
-                            description: Command to be run by this probe.
+                            description: Command is the command line to execute inside the container, the working directory for the command  is root ('/') in the container's filesystem. The command is simply exec'd, it is not run inside a shell, so traditional shell instructions ('|', etc) won't work. To use a shell, you need to explicitly call out to that shell. Exit status of 0 is treated as live/healthy and non-zero is unhealthy.
                             items:
                               type: string
                             type: array
-                        required:
-                        - command
                         type: object
                       failureThreshold:
-                        description: FailureThreshold specifies how many consecutive probes must fail in order for the container to be considered healthy.
+                        description: Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.
                         format: int32
                         type: integer
                       httpGet:
-                        description: HTTPGet probes a container's health by sending an HTTP GET request.
+                        description: HTTPGet specifies the http request to perform.
                         properties:
+                          host:
+                            description: Host name to connect to, defaults to the pod IP. You probably want to set "Host" in httpHeaders instead.
+                            type: string
                           httpHeaders:
-                            description: HTTPHeaders to send with the GET request.
+                            description: Custom headers to set in the request. HTTP allows repeated headers.
                             items:
-                              description: A HTTPHeader to be passed when probing a container.
+                              description: HTTPHeader describes a custom header to be used in HTTP probes
                               properties:
                                 name:
-                                  description: Name of this HTTP header. Must be unique per probe.
+                                  description: The header field name
                                   type: string
                                 value:
-                                  description: Value of this HTTP header.
+                                  description: The header field value
                                   type: string
                               required:
-                              - name
-                              - value
+                                - name
+                                - value
                               type: object
                             type: array
                           path:
-                            description: Path to probe, e.g. '/healthz'.
+                            description: Path to access on the HTTP server.
                             type: string
                           port:
-                            description: Port to probe.
-                            format: int32
-                            type: integer
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                            x-kubernetes-int-or-string: true
+                          scheme:
+                            description: Scheme to use for connecting to the host. Defaults to HTTP.
+                            type: string
                         required:
-                        - path
                         - port
                         type: object
                       initialDelaySeconds:
-                        description: InitialDelaySeconds after a container starts before the first probe.
+                        description: 'Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                         format: int32
                         type: integer
                       periodSeconds:
-                        description: PeriodSeconds between probes.
+                        description: How often (in seconds) to perform the probe. Default to 10 seconds. Minimum value is 1.
                         format: int32
                         type: integer
                       successThreshold:
-                        description: SuccessThreshold specifies how many consecutive probes must success in order for the container to be considered healthy.
+                        description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
                         format: int32
                         type: integer
                       tcpSocket:
-                        description: TCPSocketProbe probes a container's health by connecting to a TCP socket.
+                        description: 'TCPSocket specifies an action involving a TCP port. TCP hooks not yet supported TODO: implement a realistic TCP lifecycle hook'
                         properties:
+                          host:
+                            description: 'Optional: Host name to connect to, defaults to the pod IP.'
+                            type: string
                           port:
-                            description: Port this probe should connect to.
-                            format: int32
-                            type: integer
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                            x-kubernetes-int-or-string: true
                         required:
                         - port
                         type: object
                       timeoutSeconds:
-                        description: TimeoutSeconds after which the probe times out.
+                        description: 'Number of seconds after which the probe times out. Defaults to 1 second. Minimum value is 1. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                         format: int32
                         type: integer
                     type: object
@@ -209,13 +222,17 @@ spec:
                           description: Port number. Must be unique within its container.
                           format: int32
                           type: integer
+                        hostPort:
+                          description: Number of port to expose on the host. If specified, this must be a valid port number, 0 < x < 65536. If HostNetwork is specified, this must match ContainerPort. Most containers do not need this.
+                          format: int32
+                          type: integer
                         name:
                           type: string
                         protocol:
                           description: 'TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP once we''re generating v1 CRDs. Protocol used by the server listening on this port.'
                           enum:
-                          - TCP
-                          - UDP
+                            - TCP
+                            - UDP
                           type: string
                       required:
                       - containerPort
@@ -226,74 +243,84 @@ spec:
                     description: A ReadinessProbe assesses whether this container is ready to serve requests. Containers that fail readiness probes will be withdrawn from service.
                     properties:
                       exec:
-                        description: Exec probes a container's health by executing a command.
+                        description: One and only one of the following should be specified. Exec specifies the action to take.
                         properties:
                           command:
-                            description: Command to be run by this probe.
+                            description: Command is the command line to execute inside the container, the working directory for the command  is root ('/') in the container's filesystem. The command is simply exec'd, it is not run inside a shell, so traditional shell instructions ('|', etc) won't work. To use a shell, you need to explicitly call out to that shell. Exit status of 0 is treated as live/healthy and non-zero is unhealthy.
                             items:
                               type: string
                             type: array
-                        required:
-                        - command
                         type: object
                       failureThreshold:
-                        description: FailureThreshold specifies how many consecutive probes must fail in order for the container to be considered healthy.
+                        description: Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.
                         format: int32
                         type: integer
                       httpGet:
-                        description: HTTPGet probes a container's health by sending an HTTP GET request.
+                        description: HTTPGet specifies the http request to perform.
                         properties:
+                          host:
+                            description: Host name to connect to, defaults to the pod IP. You probably want to set "Host" in httpHeaders instead.
+                            type: string
                           httpHeaders:
-                            description: HTTPHeaders to send with the GET request.
+                            description: Custom headers to set in the request. HTTP allows repeated headers.
                             items:
-                              description: A HTTPHeader to be passed when probing a container.
+                              description: HTTPHeader describes a custom header to be used in HTTP probes
                               properties:
                                 name:
-                                  description: Name of this HTTP header. Must be unique per probe.
+                                  description: The header field name
                                   type: string
                                 value:
-                                  description: Value of this HTTP header.
+                                  description: The header field value
                                   type: string
                               required:
-                              - name
-                              - value
+                                - name
+                                - value
                               type: object
                             type: array
                           path:
-                            description: Path to probe, e.g. '/healthz'.
+                            description: Path to access on the HTTP server.
                             type: string
                           port:
-                            description: Port to probe.
-                            format: int32
-                            type: integer
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                            x-kubernetes-int-or-string: true
+                          scheme:
+                            description: Scheme to use for connecting to the host. Defaults to HTTP.
+                            type: string
                         required:
-                        - path
                         - port
                         type: object
                       initialDelaySeconds:
-                        description: InitialDelaySeconds after a container starts before the first probe.
+                        description: 'Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                         format: int32
                         type: integer
                       periodSeconds:
-                        description: PeriodSeconds between probes.
+                        description: How often (in seconds) to perform the probe. Default to 10 seconds. Minimum value is 1.
                         format: int32
                         type: integer
                       successThreshold:
-                        description: SuccessThreshold specifies how many consecutive probes must success in order for the container to be considered healthy.
+                        description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
                         format: int32
                         type: integer
                       tcpSocket:
-                        description: TCPSocketProbe probes a container's health by connecting to a TCP socket.
+                        description: 'TCPSocket specifies an action involving a TCP port. TCP hooks not yet supported TODO: implement a realistic TCP lifecycle hook'
                         properties:
+                          host:
+                            description: 'Optional: Host name to connect to, defaults to the pod IP.'
+                            type: string
                           port:
-                            description: Port this probe should connect to.
-                            format: int32
-                            type: integer
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                            x-kubernetes-int-or-string: true
                         required:
                         - port
                         type: object
                       timeoutSeconds:
-                        description: TimeoutSeconds after which the probe times out.
+                        description: 'Number of seconds after which the probe times out. Defaults to 1 second. Minimum value is 1. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                         format: int32
                         type: integer
                     type: object
@@ -304,6 +331,7 @@ spec:
                         description: CPU required by this container.
                         properties:
                           required:
+                            description: Required CPU count. 1.0 represents one CPU core.
                             type: string
                         required:
                         - required
@@ -386,13 +414,18 @@ spec:
                           type: object
                         type: array
                     required:
-                    - cpu
-                    - memory
+                      - cpu
+                      - memory
                     type: object
                 required:
-                - image
-                - name
+                  - image
+                  - name
                 type: object
+              type: array
+            dependency:
+              description: Dependency components
+              items:
+                type: string
               type: array
             nodeSelector:
               additionalProperties:
@@ -402,14 +435,14 @@ spec:
             osType:
               description: OperatingSystem required by this workload.
               enum:
-              - linux
+                - linux
               - windows
               type: string
             pointToGrayName:
               description: old grey workload name need modify match selector
               type: string
             serviceMesh:
-              description: check is install istio
+              description: check add istio label
               type: boolean
           required:
           - containers

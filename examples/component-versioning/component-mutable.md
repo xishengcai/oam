@@ -14,7 +14,7 @@ Step 1. Create OAM component
 $ kubectl apply -f examples/containerized-workload/sample_workload_definition.yaml
 $ kubectl apply -f examples/containerized-workload/sample_trait_definition.yaml
 $ kubectl apply -f examples/containerized-workload/sample_scope_definition.yaml
-$ kubectl apply -f examples/containerized-workload/sample_component.yaml
+$ kubectl apply -f examples/containerized-workload/cloud-component.yaml
 component.core.oam.dev/example-component created
 ``` 
 
@@ -68,7 +68,7 @@ revision: 1
 Step 2. Create AppConfig
 
 ```shell script
-$ kubectl apply -f examples/containerized-workload/sample_application_config.yaml
+$ kubectl apply -f examples/containerized-workload/application_config.yaml
 applicationconfiguration.core.oam.dev/example-appconfig created
 ```
 
@@ -188,7 +188,7 @@ component.core.oam.dev "example-component" deleted
 Step 1. The first step is the same. Create OAM component, and check the ControllerRevision.
 
 ```shell script
-$ kubectl apply -f examples/containerized-workload/sample_component.yaml
+$ kubectl apply -f examples/containerized-workload/cloud-component.yaml
 component.core.oam.dev/example-component created
 ``` 
 
