@@ -18,6 +18,7 @@ package v1alpha2
 
 import (
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -340,13 +341,13 @@ type Container struct {
 	// A LivenessProbe assesses whether this container is alive. Containers that
 	// fail liveness probes will be restarted.
 	// +optional
-	LivenessProbe *ContainerHealthProbe `json:"livenessProbe,omitempty"`
+	LivenessProbe *corev1.Probe `json:"livenessProbe,omitempty"`
 
 	// A ReadinessProbe assesses whether this container is ready to serve
 	// requests. Containers that fail readiness probes will be withdrawn from
 	// service.
 	// +optional
-	ReadinessProbe *ContainerHealthProbe `json:"readinessProbe,omitempty"`
+	ReadinessProbe *corev1.Probe `json:"readinessProbe,omitempty"`
 
 	// TODO(negz): Ideally the key within this secret would be configurable, but
 	// the current OAM spec allows only a secret name.
@@ -385,6 +386,10 @@ type ContainerizedWorkloadSpec struct {
 	// check is install istio
 	// +optional
 	ServiceMesh bool `json:"serviceMesh"` // 是否开启服务网格
+
+	// Dependency components
+	// +optional
+	Dependency []string `json:"dependency,omitempty"`
 }
 
 // A ContainerizedWorkloadStatus represents the observed state of a
