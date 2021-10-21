@@ -1,0 +1,25 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: cloud
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    spec:
+      containers:
+        - name: cloud
+          image: xishengcai/cloud
+          ports:
+            - containerPort: 80
+              name: cloud
+          env:
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: "6379"
+      dependency:
+        - kind: ContainerizedWorkload
+          name: redis
+        - kind: HelmRelease
+          name: podinfo

@@ -35,7 +35,7 @@ You can see that the  `revisionEnabled` flag is set to true.
 Step 1. Create OAM component
 
 ```shell script
-$ kubectl apply -f examples/containerized-workload/sample_component.yaml
+$ kubectl apply -f examples/containerized-workload/cloud-helm-component.yaml
 component.core.oam.dev/example-component created
 ``` 
 

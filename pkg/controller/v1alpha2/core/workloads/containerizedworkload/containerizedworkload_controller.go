@@ -88,12 +88,20 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
 	// log.Info("Get the workload", "apiVersion", workload.APIVersion, "kind", workload.Kind)
 	// find the resource object to record the event to, default is the parent appConfig.
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &workload)
 	if eventObj == nil {
 		klog.ErrorS(err, "LocateParentAppConfig failed", "workloadName", workload.Name)
 		eventObj = &workload
+	}
+
+	err = r.checkWorkloadDependency(&workload)
+	if err != nil {
+		klog.ErrorS(err, "Failed to checkWorkloadDependency", "name", workload.Name)
+		r.record.Event(eventObj, event.Warning(errRenderWorkload, err))
+		return util.ReconcileWaitResult, err
 	}
 
 	// applicationConfiguration write label by workload child define
@@ -283,4 +291,99 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&corev1.ConfigMap{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
+}
+
+func (r *Reconciler) checkWorkloadDependency(wl *v1alpha2.ContainerizedWorkload) error {
+	deps := wl.Spec.Dependency
+	ctx := context.Background()
+	for _, dep := range deps {
+		key := client.ObjectKey{Namespace: wl.Namespace, Name: dep.Name}
+		switch dep.Kind {
+		case v1alpha2.ContainerizedWorkloadKind:
+			workload := &v1alpha2.ContainerizedWorkload{}
+			if err := r.Get(ctx, key, workload); err != nil {
+				return err
+			}
+			err := r.queryContainerizedWorkloadChildHealth(wl.Labels[util.LabelKeyChildResource], key)
+			if err != nil {
+				return err
+			}
+		case "HelmRelease":
+			err := r.queryHelmReleaseWorkloadHealth(wl, dep.Name)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *Reconciler) queryContainerizedWorkloadChildHealth(label string, key client.ObjectKey) error {
+	ctx := context.Background()
+	switch label {
+	case util.KindDeployment:
+		deploy := &appsv1.Deployment{}
+		err := r.Get(ctx, key, deploy)
+		if err != nil {
+			return err
+		}
+		if deploy.Status.ReadyReplicas != deploy.Status.Replicas {
+			return fmt.Errorf("deployment: %s is not ready, ReadyReplicas: %d, Replicas: %d",
+				deploy.Name, deploy.Status.ReadyReplicas, deploy.Status.Replicas)
+		}
+	case util.KindStatefulSet:
+		sts := &appsv1.StatefulSet{}
+		err := r.Get(ctx, key, sts)
+		if err != nil {
+			return err
+		}
+		if sts.Status.ReadyReplicas != sts.Status.Replicas {
+			return fmt.Errorf("statefulSet:%s is not ready, ReadyReplicas: %d, Replicas: %d",
+				sts.Name, sts.Status.ReadyReplicas, sts.Status.Replicas)
+		}
+	}
+	return nil
+}
+
+func (r *Reconciler) queryHelmReleaseWorkloadHealth(wl *v1alpha2.ContainerizedWorkload, depName string) error {
+	ctx := context.Background()
+
+	notFoundFlag := true
+
+	// check deployment status
+	labelSelect := client.MatchingLabels{
+		util.LabelAppID:       wl.Labels[util.LabelAppID],
+		util.LabelComponentID: depName,
+	}
+	deployList := &appsv1.DeploymentList{}
+	err := r.List(ctx, deployList, labelSelect)
+	if err != nil {
+		return err
+	}
+
+	for _, deploy := range deployList.Items {
+		if deploy.Status.ReadyReplicas != deploy.Status.Replicas {
+			return fmt.Errorf("deployment %s is not ready, ReadyReplicas: %d, Replicas: %d",
+				deploy.Name, deploy.Status.ReadyReplicas, deploy.Status.Replicas)
+		}
+	}
+
+	// check statefulSet status
+	statefulSetList := &appsv1.StatefulSetList{}
+	err = r.List(ctx, statefulSetList, labelSelect)
+	if err != nil {
+		return err
+	}
+	for _, sts := range statefulSetList.Items {
+		if sts.Status.ReadyReplicas != sts.Status.Replicas {
+			return fmt.Errorf("statufulSet %s is not ready, ReadyReplicas: %d, Replicas: %d",
+				sts.Name, sts.Status.ReadyReplicas, sts.Status.Replicas)
+		}
+	}
+
+	if notFoundFlag {
+		return fmt.Errorf("component %s not found dependency %s's workload", wl.Name, depName)
+	}
+	return nil
 }

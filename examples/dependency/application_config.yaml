@@ -1,0 +1,10 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-appconfig
+spec:
+  components:
+    - componentName: redis
+    - componentName: cloud
+    - componentName: podinfo
+
