@@ -5,7 +5,6 @@ go 1.16
 require (
 	github.com/crossplane/crossplane-runtime v0.11.0
 	github.com/davecgh/go-spew v1.1.1
-	github.com/go-logr/logr v0.1.0
 	github.com/oam-dev/kubevela v0.3.4
 	github.com/onsi/ginkgo v1.13.0
 	github.com/onsi/gomega v1.10.3

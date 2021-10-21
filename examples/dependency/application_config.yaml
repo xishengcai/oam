@@ -6,4 +6,5 @@ spec:
   components:
     - componentName: redis
     - componentName: cloud
+    - componentName: podinfo
 

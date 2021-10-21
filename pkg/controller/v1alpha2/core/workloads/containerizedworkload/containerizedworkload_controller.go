@@ -297,34 +297,93 @@ func (r *Reconciler) checkWorkloadDependency(wl *v1alpha2.ContainerizedWorkload)
 	deps := wl.Spec.Dependency
 	ctx := context.Background()
 	for _, dep := range deps {
-		key := client.ObjectKey{Namespace: wl.Namespace, Name: dep}
-		workload := &v1alpha2.ContainerizedWorkload{}
-		if err := r.Get(ctx, key, workload); err != nil {
-			return err
-		}
-		switch workload.Labels[util.LabelKeyChildResource] {
-		case util.KindDeployment:
-			deploy := &appsv1.Deployment{}
-			err := r.Get(ctx, key, deploy)
+		key := client.ObjectKey{Namespace: wl.Namespace, Name: dep.Name}
+		switch dep.Kind {
+		case v1alpha2.ContainerizedWorkloadKind:
+			workload := &v1alpha2.ContainerizedWorkload{}
+			if err := r.Get(ctx, key, workload); err != nil {
+				return err
+			}
+			err := r.queryContainerizedWorkloadChildHealth(wl.Labels[util.LabelKeyChildResource], key)
 			if err != nil {
 				return err
 			}
-			if deploy.Status.ReadyReplicas != deploy.Status.Replicas {
-				return fmt.Errorf("the dependency of component %s is not ready. Dployment: %s, ReadyReplicas: %d, Replicas: %d",
-					wl.Name, deploy.Name, deploy.Status.ReadyReplicas, deploy.Status.Replicas)
-			}
-		case util.KindStatefulSet:
-			sts := &appsv1.StatefulSet{}
-			err := r.Get(ctx, key, sts)
+		case "HelmRelease":
+			err := r.queryHelmReleaseWorkloadHealth(wl, dep.Name)
 			if err != nil {
 				return err
-			}
-			if sts.Status.ReadyReplicas != sts.Status.Replicas {
-				return fmt.Errorf("the dependency of component %s is not ready. StatefulSet: %s, ReadyReplicas: %d, Replicas: %d",
-					wl.Name, sts.Name, sts.Status.ReadyReplicas, sts.Status.Replicas)
 			}
 		}
 	}
 
+	return nil
+}
+
+func (r *Reconciler) queryContainerizedWorkloadChildHealth(label string, key client.ObjectKey) error {
+	ctx := context.Background()
+	switch label {
+	case util.KindDeployment:
+		deploy := &appsv1.Deployment{}
+		err := r.Get(ctx, key, deploy)
+		if err != nil {
+			return err
+		}
+		if deploy.Status.ReadyReplicas != deploy.Status.Replicas {
+			return fmt.Errorf("deployment: %s is not ready, ReadyReplicas: %d, Replicas: %d",
+				deploy.Name, deploy.Status.ReadyReplicas, deploy.Status.Replicas)
+		}
+	case util.KindStatefulSet:
+		sts := &appsv1.StatefulSet{}
+		err := r.Get(ctx, key, sts)
+		if err != nil {
+			return err
+		}
+		if sts.Status.ReadyReplicas != sts.Status.Replicas {
+			return fmt.Errorf("statefulSet:%s is not ready, ReadyReplicas: %d, Replicas: %d",
+				sts.Name, sts.Status.ReadyReplicas, sts.Status.Replicas)
+		}
+	}
+	return nil
+}
+
+func (r *Reconciler) queryHelmReleaseWorkloadHealth(wl *v1alpha2.ContainerizedWorkload, depName string) error {
+	ctx := context.Background()
+
+	notFoundFlag := true
+
+	// check deployment status
+	labelSelect := client.MatchingLabels{
+		util.LabelAppID:       wl.Labels[util.LabelAppID],
+		util.LabelComponentID: depName,
+	}
+	deployList := &appsv1.DeploymentList{}
+	err := r.List(ctx, deployList, labelSelect)
+	if err != nil {
+		return err
+	}
+
+	for _, deploy := range deployList.Items {
+		if deploy.Status.ReadyReplicas != deploy.Status.Replicas {
+			return fmt.Errorf("deployment %s is not ready, ReadyReplicas: %d, Replicas: %d",
+				deploy.Name, deploy.Status.ReadyReplicas, deploy.Status.Replicas)
+		}
+	}
+
+	// check statefulSet status
+	statefulSetList := &appsv1.StatefulSetList{}
+	err = r.List(ctx, statefulSetList, labelSelect)
+	if err != nil {
+		return err
+	}
+	for _, sts := range statefulSetList.Items {
+		if sts.Status.ReadyReplicas != sts.Status.Replicas {
+			return fmt.Errorf("statufulSet %s is not ready, ReadyReplicas: %d, Replicas: %d",
+				sts.Name, sts.Status.ReadyReplicas, sts.Status.Replicas)
+		}
+	}
+
+	if notFoundFlag {
+		return fmt.Errorf("component %s not found dependency %s's workload", wl.Name, depName)
+	}
 	return nil
 }

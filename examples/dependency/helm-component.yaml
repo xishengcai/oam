@@ -1,0 +1,19 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: podinfo
+spec:
+  workload:
+    apiVersion: helm.fluxcd.io/v1
+    kind: HelmRelease
+    metadata:
+      name: podinfo
+      namespace: default
+    spec:
+      appId: "appconfig"
+      componentId: "podinfo"
+      chart:
+        repository: https://charts.bitnami.com/bitnami
+        name: nginx
+        version: 8.9.1
+
