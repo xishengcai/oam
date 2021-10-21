@@ -389,7 +389,15 @@ type ContainerizedWorkloadSpec struct {
 
 	// Dependency components
 	// +optional
-	Dependency []string `json:"dependency,omitempty"`
+	Dependency []Dependency `json:"dependency,omitempty"`
+}
+
+type Dependency struct {
+	// Kind of the referenced object.
+	Kind string `json:"kind"`
+
+	// Name of the referenced object.
+	Name string `json:"name"`
 }
 
 // A ContainerizedWorkloadStatus represents the observed state of a
