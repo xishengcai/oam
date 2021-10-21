@@ -70,7 +70,7 @@ spec:
 When users apply this yaml file into the system.
 
 ```shell script
-$ kubectl apply -f component.yaml
+$ kubectl apply -f helm-component.yaml
 ```
 
 A `ControllerRevision` object will be created.

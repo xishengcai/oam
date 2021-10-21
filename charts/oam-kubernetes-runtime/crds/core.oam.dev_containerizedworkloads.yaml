@@ -425,7 +425,17 @@ spec:
               dependency:
                 description: Dependency components
                 items:
-                  type: string
+                  properties:
+                    kind:
+                      description: Kind of the referenced object.
+                      type: string
+                    name:
+                      description: Name of the referenced object.
+                      type: string
+                  required:
+                    - kind
+                    - name
+                  type: object
                 type: array
               nodeSelector:
                 additionalProperties:

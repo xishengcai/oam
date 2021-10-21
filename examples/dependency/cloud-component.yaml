@@ -19,4 +19,7 @@ spec:
             - name: REDIS_PORT
               value: "6379"
       dependency:
-        - redis
+        - kind: ContainerizedWorkload
+          name: redis
+        - kind: HelmRelease
+          name: podinfo

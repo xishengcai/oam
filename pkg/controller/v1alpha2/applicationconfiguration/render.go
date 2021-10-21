@@ -200,13 +200,13 @@ func (r *components) renderComponent(ctx context.Context,
 		return nil, err
 	}
 
-	if existingWorkload.Object == nil {
+	if existingWorkload != nil && existingWorkload.Object == nil {
 		if volumeTraitExit {
 			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
 		} else {
 			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindDeployment})
 		}
-	} else {
+	} else if existingWorkload != nil {
 		util.AddLabels(w, existingWorkload.GetLabels())
 	}
 
