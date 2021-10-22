@@ -390,6 +390,7 @@ type ContainerizedWorkloadSpec struct {
 
 type Dependency struct {
 	// Kind of the referenced object.
+	// +kubebuilder:validation:Enum=HelmRelease;ContainerizedWorkload;Third;
 	Kind string `json:"kind"`
 
 	// Name of the referenced object.

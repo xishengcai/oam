@@ -10,7 +10,7 @@ spec:
       name: podinfo
       namespace: default
     spec:
-      appId: "appconfig"
+      appId: "example-appconfig"
       componentId: "podinfo"
       chart:
         repository: https://charts.bitnami.com/bitnami
