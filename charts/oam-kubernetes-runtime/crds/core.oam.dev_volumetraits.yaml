@@ -43,6 +43,8 @@ spec:
                     paths:
                       items:
                         properties:
+                          hostPath:
+                            type: string
                           name:
                             type: string
                           path:
@@ -51,11 +53,12 @@ spec:
                             type: string
                           storageClassName:
                             type: string
+                          type:
+                            description: type enum:"HostPath,StorageClass", default is StorageClass.
+                            type: string
                         required:
                         - name
                         - path
-                        - size
-                        - storageClassName
                         type: object
                       type: array
                   required:
