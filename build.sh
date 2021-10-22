@@ -33,7 +33,7 @@ if [ -z "$IMAGE_NAME" ]; then
 fi
 
 if [ -z "$VERSION" ]; then
-  VERSION='v100r001c02b020'
+  VERSION='v100r001c02b051'
 fi
 
 if [ -z "$IMAGE_REPO" ]; then

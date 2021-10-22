@@ -428,6 +428,10 @@ spec:
                   properties:
                     kind:
                       description: Kind of the referenced object.
+                      enum:
+                        - HelmRelease
+                        - ContainerizedWorkload
+                        - Third
                       type: string
                     name:
                       description: Name of the referenced object.
