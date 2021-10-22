@@ -426,6 +426,9 @@ spec:
                   properties:
                     kind:
                       description: Kind of the referenced object.
+                      enum:
+                      - HelmRelease
+                      - ContainerizedWorkload
                       type: string
                     name:
                       description: Name of the referenced object.
