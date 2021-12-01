@@ -225,6 +225,18 @@ type ComponentSpec struct {
 	// will in turn be injected into the embedded workload.
 	// +optional
 	Parameters []ComponentParameter `json:"parameters,omitempty"`
+
+	PersistVolumeClaims PVC `json:"persistVolumeClaims,omitempty"`
+}
+
+type PVC struct {
+	// Name is the name of PVC
+	Name string `json:"name"`
+	// type 原则上应该是【枚举，必填】，但是为了向前兼容，不做强制,[HostPath,PVC,StorageClass]
+	Type             string `json:"type,omitempty"`
+	StorageClassName string `json:"storageClassName,omitempty"`
+	HostPath         string `json:"hostPath,omitempty"`
+	Size             string `json:"size,omitempty"`
 }
 
 // A ComponentStatus represents the observed state of a Component.

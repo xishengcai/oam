@@ -64,18 +64,24 @@ type SecretKeySelector struct {
 type CPUResources struct {
 	// Required CPU count. 1.0 represents one CPU core.
 	Required resource.Quantity `json:"required"`
+	// Limits describes the maximum amount of compute resources allowed.
+	// More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/
+	// +optional
+	Limits resource.Quantity `json:"limits"`
 }
 
 // MemoryResources required by a container.
 type MemoryResources struct {
 	// Required memory.
 	Required resource.Quantity `json:"required"`
+	Limits   resource.Quantity `json:"limits"`
 }
 
 // GPUResources required by a container.
 type GPUResources struct {
 	// Required GPU count.
 	Required resource.Quantity `json:"required"`
+	Limits   resource.Quantity `json:"limits"`
 }
 
 // DiskResource required by a container.
@@ -382,6 +388,9 @@ type ContainerizedWorkloadSpec struct {
 
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
+
+	// An ApplicationConfigurationSpec defines the desired state of a
+	InitContainers []Container `json:"initContainers,omitempty"`
 
 	// check is install istio
 	// +optional
