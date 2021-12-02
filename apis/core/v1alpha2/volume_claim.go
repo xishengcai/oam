@@ -48,6 +48,7 @@ type VolumeClaimList struct {
 type VolumeClaimConfig struct {
 	Name string `json:"name"`
 	// type enum:"HostPath,StorageClass", default is StorageClass.
+	Type             string `json:"type,omitempty"`
 	HostPath         string `json:"hostPath,omitempty"`
 	StorageClassName string `json:"storageClassName,omitempty"`
 	Size             string `json:"size,omitempty"`
