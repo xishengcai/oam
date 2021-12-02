@@ -1,0 +1,17 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-hostpath
+spec:
+  components:
+    - componentName: oam-component-hostpath
+  volumeClaims:
+    - type: StorageClass
+      storageClassName: hello
+      name: sc-1
+      size: 10Gi
+    - type: HostPath
+      hostPath: /data/opt/xxx
+      name: hp-1
+
+

@@ -40,15 +40,15 @@ type VolumeMountItem struct {
 
 // PathItem define storageClass, size, path, name
 type PathItem struct {
-	// type 原则上应该是【枚举，必填】，但是为了向前兼容，不做强制
-	Type             string `json:"type,omitempty"`
-	StorageClassName string `json:"storageClassName,omitempty"`
-	HostPath         string `json:"hostPath,omitempty"`
-	Size             string `json:"size,omitempty"`
+	Name                  string `json:"name"`
+	PersistentVolumeClaim string `json:"persistentVolumeClaim"`
+	Path                  string `json:"path"`
 
-	// 容器内路径
-	Path string `json:"path"`
-	Name string `json:"name"`
+	// 下面的字段废弃
+	Type             string `json:"type,omitempty"`
+	HostPath         string `json:"hostPath,omitempty"`
+	StorageClassName string `json:"storageClassName,omitempty"`
+	Size             string `json:"size,omitempty"`
 }
 
 // A VolumeTraitStatus represents the observed state of a

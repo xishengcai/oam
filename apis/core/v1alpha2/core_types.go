@@ -346,6 +346,8 @@ type ApplicationConfigurationSpec struct {
 	// Components of which this ApplicationConfiguration consists. Each
 	// component will be used to instantiate a workload.
 	Components []ApplicationConfigurationComponent `json:"components"`
+
+	VolumeClaims []VolumeClaimConfig `json:"volumeClaims"`
 }
 
 // A TraitStatus represents the state of a trait.

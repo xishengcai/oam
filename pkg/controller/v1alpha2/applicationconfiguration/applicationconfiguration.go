@@ -18,7 +18,6 @@ package applicationconfiguration
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +25,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/pkg/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,41 +41,7 @@ import (
 	"github.com/xishengcai/oam/pkg/controller"
 	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
-	"github.com/xishengcai/oam/pkg/oam/util"
 	"github.com/xishengcai/oam/util/apply"
-)
-
-const (
-	reconcileTimeout = 1 * time.Minute
-	dependCheckWait  = 10 * time.Second
-	shortWait        = 30 * time.Second
-)
-
-// Reconcile error strings.
-const (
-	errGetAppConfig          = "cannot get application configuration"
-	errUpdateAppConfigStatus = "cannot update application configuration status"
-	errExecutePrehooks       = "failed to execute pre-hooks"
-	errExecutePosthooks      = "failed to execute post-hooks"
-	errRenderComponents      = "cannot render components"
-	errApplyComponents       = "cannot apply components"
-	errGCComponent           = "cannot garbage collect components"
-	errFinalizeWorkloads     = "failed to finalize workloads"
-)
-
-// Reconcile event reasons.
-const (
-	reasonRenderComponents        = "RenderedComponents"
-	reasonExecutePrehook          = "ExecutePrehook"
-	reasonExecutePosthook         = "ExecutePosthook"
-	reasonApplyComponents         = "AppliedComponents"
-	reasonGGComponent             = "GarbageCollectedComponent"
-	reasonCannotExecutePrehooks   = "CannotExecutePrehooks"
-	reasonCannotExecutePosthooks  = "CannotExecutePosthooks"
-	reasonCannotRenderComponents  = "CannotRenderComponents"
-	reasonCannotApplyComponents   = "CannotApplyComponents"
-	reasonCannotGGComponents      = "CannotGarbageCollectComponents"
-	reasonCannotFinalizeWorkloads = "CannotFinalizeWorkloads"
 )
 
 // Setup adds a controller that reconciles ApplicationConfigurations.
@@ -106,39 +70,13 @@ func Setup(mgr ctrl.Manager, args controller.Args) error {
 type OAMApplicationReconciler struct {
 	client        client.Client
 	components    ComponentRenderer
+	volumeClaims  VolumeClaimRenderer
 	workloads     WorkloadApplicator
 	gc            GarbageCollector
 	scheme        *runtime.Scheme
 	record        event.Recorder
-	preHooks      map[string]ControllerHooks
-	postHooks     map[string]ControllerHooks
 	applyOnceOnly bool
 	syncTime      time.Duration
-}
-
-// A ReconcilerOption configures a Reconciler.
-type ReconcilerOption func(*OAMApplicationReconciler)
-
-// WithRecorder specifies how the Reconciler should record events.
-func WithRecorder(er event.Recorder) ReconcilerOption {
-	return func(r *OAMApplicationReconciler) {
-		r.record = er
-	}
-}
-
-// WithApplyOnceOnly indicates whether workloads and traits should be
-// affected if no spec change is made in the ApplicationConfiguration.
-func WithApplyOnceOnly(applyOnceOnly bool) ReconcilerOption {
-	return func(r *OAMApplicationReconciler) {
-		r.applyOnceOnly = applyOnceOnly
-	}
-}
-
-// WithSetSync set Reconciler exec interval
-func WithSetSync(syncTime time.Duration) ReconcilerOption {
-	return func(r *OAMApplicationReconciler) {
-		r.syncTime = syncTime
-	}
 }
 
 // NewReconciler returns an OAMApplicationReconciler that reconciles ApplicationConfigurations
@@ -154,11 +92,12 @@ func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...Reco
 			workload: ResourceRenderFn(renderWorkload),
 			trait:    ResourceRenderFn(renderTrait),
 		},
+		volumeClaims: &volumeClaims{
+			applicator: apply.NewAPIApplicator(m.GetClient()),
+		},
 
-		gc:        GarbageCollectorFn(eligible),
-		record:    event.NewNopRecorder(),
-		preHooks:  make(map[string]ControllerHooks),
-		postHooks: make(map[string]ControllerHooks),
+		gc:     GarbageCollectorFn(eligible),
+		record: event.NewNopRecorder(),
 		workloads: &workloads{
 			applicator: apply.NewAPIApplicator(m.GetClient()),
 			rawClient:  m.GetClient(),
@@ -187,53 +126,9 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetAppConfig)
 	}
 	acPatch := ac.DeepCopy()
-
-	if ac.ObjectMeta.DeletionTimestamp.IsZero() {
-		if registerFinalizers(ac) {
-			klog.Info("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
-			return reconcile.Result{}, errors.Wrap(r.client.Update(ctx, ac), errUpdateAppConfigStatus)
-		}
-	} else {
-		if err := r.workloads.Finalize(ctx, ac); err != nil {
-			klog.ErrorS(err, "Failed to finalize workloads", "workloads status", ac.Status.Workloads, "requeue-after", result.RequeueAfter)
-			r.record.Event(ac, event.Warning(reasonCannotFinalizeWorkloads, err))
-			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errFinalizeWorkloads)))
-			return reconcile.Result{}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
-		}
-		return reconcile.Result{}, errors.Wrap(r.client.Update(ctx, ac), errUpdateAppConfigStatus)
+	if err := r.handleDeleteTimeStamp(ctx, ac); err != nil {
+		return reconcile.Result{}, err
 	}
-
-	// execute the posthooks at the end no matter what
-	defer func() {
-		updateObservedGeneration(ac)
-		for name, hook := range r.postHooks {
-			exeResult, err := hook.Exec(ctx, ac)
-			if err != nil {
-				klog.ErrorS(err, "Failed to execute post-hooks", "hook name", name, "requeue-after", result.RequeueAfter)
-				r.record.Event(ac, event.Warning(reasonCannotExecutePosthooks, err))
-				ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePosthooks)))
-				result = exeResult
-				returnErr = errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
-				return
-			}
-			r.record.Event(ac, event.Normal(reasonExecutePosthook, "Successfully executed a posthook", "posthook name", name))
-		}
-		returnErr = errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
-	}()
-
-	// execute the prehooks
-	for name, hook := range r.preHooks {
-		result, err := hook.Exec(ctx, ac)
-		if err != nil {
-			klog.ErrorS(err, "Failed to execute pre-hooks", "hook name", name)
-			r.record.Event(ac, event.Warning(reasonCannotExecutePrehooks, err))
-			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePrehooks)))
-			return result, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
-		}
-		r.record.Event(ac, event.Normal(reasonExecutePrehook, "Successfully executed a prehook", "prehook name ", name))
-	}
-
-	//log = log.WithValues("uid", ac.GetUID(), "version", ac.GetResourceVersion())
 
 	workloads, depStatus, err := r.components.Render(ctx, ac)
 	if err != nil {
@@ -279,6 +174,13 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 		record.Event(ac, event.Normal(reasonGGComponent, "Successfully garbage collected component"))
 	}
 
+	// create volumeClaims
+	if err := r.volumeClaims.Render(ctx, ac); err != nil {
+		klog.ErrorS(err, "Cannot apply volumeClaims", "requeue-after", time.Now().Add(shortWait))
+		r.record.Event(ac, event.Warning(reasonCannotApplyComponents, err))
+		ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errApplyComponents)))
+		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+	}
 	// patch the final status on the client side, k8s sever can't merge them
 	r.updateStatus(ctx, ac, acPatch, workloads)
 
@@ -383,177 +285,20 @@ func hasScope(ac *v1alpha2.ApplicationConfiguration) bool {
 	return false
 }
 
-// A Workload produced by an OAM ApplicationConfiguration.
-type Workload struct {
-	// ComponentName that produced this workload.
-	ComponentName string
-
-	// ComponentRevisionName of current component
-	ComponentRevisionName string
-
-	// A Workload object.
-	Workload *unstructured.Unstructured
-
-	// HasDep indicates whether this resource has dependencies and unready to be applied.
-	HasDep bool
-
-	// Traits associated with this workload.
-	Traits []*Trait
-
-	// RevisionEnabled means multiple workloads of same component will possibly be alive.
-	RevisionEnabled bool
-
-	// Scopes associated with this workload.
-	Scopes []unstructured.Unstructured
-}
-
-// A Trait produced by an OAM ApplicationConfiguration.
-type Trait struct {
-	Object unstructured.Unstructured
-
-	// HasDep indicates whether this resource has dependencies and unready to be applied.
-	HasDep bool
-
-	// Definition indicates the trait's definition
-	Definition v1alpha2.TraitDefinition
-}
-
-// Status produces the status of this workload and its traits, suitable for use
-// in the status of an ApplicationConfiguration.
-func (w Workload) Status() v1alpha2.WorkloadStatus {
-	acw := v1alpha2.WorkloadStatus{
-		ComponentName:         w.ComponentName,
-		ComponentRevisionName: w.ComponentRevisionName,
-		Reference: v1alpha1.TypedReference{
-			APIVersion: w.Workload.GetAPIVersion(),
-			Kind:       w.Workload.GetKind(),
-			Name:       w.Workload.GetName(),
-		},
-		Traits: make([]v1alpha2.WorkloadTrait, len(w.Traits)),
-		Scopes: make([]v1alpha2.WorkloadScope, len(w.Scopes)),
+func (r *OAMApplicationReconciler) handleDeleteTimeStamp(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error {
+	if ac.ObjectMeta.DeletionTimestamp.IsZero() {
+		if registerFinalizers(ac) {
+			klog.Info("Register new finalizers", "finalizers", ac.ObjectMeta.Finalizers)
+			return errors.Wrap(r.client.Update(context.Background(), ac), errUpdateAppConfigStatus)
+		}
+	} else {
+		if err := r.workloads.Finalize(context.Background(), ac); err != nil {
+			klog.ErrorS(err, "Failed to finalize workloads", "workloads status", ac.Status.Workloads)
+			r.record.Event(ac, event.Warning(reasonCannotFinalizeWorkloads, err))
+			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errFinalizeWorkloads)))
+			return errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+		}
+		return errors.Wrap(r.client.Update(ctx, ac), errUpdateAppConfigStatus)
 	}
-	for i, tr := range w.Traits {
-		if tr.Definition.Name == util.Dummy && tr.Definition.Spec.Reference.Name == util.Dummy {
-			acw.Traits[i].Message = util.DummyTraitMessage
-		}
-		acw.Traits[i].Reference = v1alpha1.TypedReference{
-			APIVersion: w.Traits[i].Object.GetAPIVersion(),
-			Kind:       w.Traits[i].Object.GetKind(),
-			Name:       w.Traits[i].Object.GetName(),
-		}
-	}
-	for i, s := range w.Scopes {
-		acw.Scopes[i].Reference = v1alpha1.TypedReference{
-			APIVersion: s.GetAPIVersion(),
-			Kind:       s.GetKind(),
-			Name:       s.GetName(),
-		}
-	}
-	return acw
-}
-
-// A GarbageCollector returns resource eligible for garbage collection. A
-// resource is considered eligible if a reference exists in the supplied slice
-// of workload statuses, but not in the supplied slice of workloads.
-type GarbageCollector interface {
-	Eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured
-}
-
-// A GarbageCollectorFn returns resource eligible for garbage collection.
-type GarbageCollectorFn func(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured
-
-// Eligible resources.
-func (fn GarbageCollectorFn) Eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured {
-	return fn(namespace, ws, w)
-}
-
-// IsRevisionWorkload check is a workload is an old revision Workload which shouldn't be garbage collected.
-// TODO(wonderflow): Do we have a better way to recognize it's a revisionWorkload which can't be garbage collected by AppConfig?
-func IsRevisionWorkload(status v1alpha2.WorkloadStatus) bool {
-	return strings.HasPrefix(status.Reference.Name, status.ComponentName+"-")
-}
-
-func eligible(namespace string, ws []v1alpha2.WorkloadStatus, w []*Workload) []unstructured.Unstructured {
-	applied := make(map[v1alpha1.TypedReference]bool)
-	for _, wl := range w {
-		r := v1alpha1.TypedReference{
-			APIVersion: wl.Workload.GetAPIVersion(),
-			Kind:       wl.Workload.GetKind(),
-			Name:       wl.Workload.GetName(),
-		}
-		applied[r] = true
-		for _, t := range wl.Traits {
-			r := v1alpha1.TypedReference{
-				APIVersion: t.Object.GetAPIVersion(),
-				Kind:       t.Object.GetKind(),
-				Name:       t.Object.GetName(),
-			}
-			applied[r] = true
-		}
-	}
-	eligible := make([]unstructured.Unstructured, 0)
-	for _, s := range ws {
-		if !applied[s.Reference] && !IsRevisionWorkload(s) {
-			w := &unstructured.Unstructured{}
-			w.SetAPIVersion(s.Reference.APIVersion)
-			w.SetKind(s.Reference.Kind)
-			w.SetNamespace(namespace)
-			w.SetName(s.Reference.Name)
-			eligible = append(eligible, *w)
-		}
-
-		for _, ts := range s.Traits {
-			if !applied[ts.Reference] {
-				t := &unstructured.Unstructured{}
-				t.SetAPIVersion(ts.Reference.APIVersion)
-				t.SetKind(ts.Reference.Kind)
-				t.SetNamespace(namespace)
-				t.SetName(ts.Reference.Name)
-				eligible = append(eligible, *t)
-			}
-		}
-	}
-
-	return eligible
-}
-
-// GenerationUnchanged indicates the resource being applied has no generation changed
-// comparing to the existing one.
-type GenerationUnchanged struct{}
-
-func (e *GenerationUnchanged) Error() string {
-	return fmt.Sprint("apply-only-once enabled,",
-		"and detect generation in the annotation unchanged, will not apply.",
-		"Please ignore this error in other logic.")
-}
-
-func applyOnceOnly() apply.ApplyOption {
-	return func(ctx context.Context, current, desired runtime.Object) error {
-		// ApplyOption only works for update/patch operation and will be ignored
-		// if the object doesn't exist before.
-		c, _ := current.(metav1.Object)
-		d, _ := desired.(metav1.Object)
-		if c == nil || d == nil {
-			return errors.Errorf("invalid object being applied: %q ",
-				desired.GetObjectKind().GroupVersionKind())
-		}
-		cLabels, dLabels := c.GetLabels(), d.GetLabels()
-		if dLabels[oam.LabelOAMResourceType] == oam.ResourceTypeWorkload ||
-			dLabels[oam.LabelOAMResourceType] == oam.ResourceTypeTrait {
-			// check whether spec changes occur on the workload or trait,
-			// according to annotations and lables
-			if c.GetAnnotations()[oam.AnnotationAppGeneration] !=
-				d.GetAnnotations()[oam.AnnotationAppGeneration] {
-				return nil
-			}
-			if cLabels[oam.LabelAppComponentRevision] != dLabels[oam.LabelAppComponentRevision] ||
-				cLabels[oam.LabelAppComponent] != dLabels[oam.LabelAppComponent] ||
-				cLabels[oam.LabelAppName] != dLabels[oam.LabelAppName] {
-				return nil
-			}
-			// return an error to abort current apply
-			return &GenerationUnchanged{}
-		}
-		return nil
-	}
+	return nil
 }

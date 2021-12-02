@@ -159,8 +159,8 @@ spec:
                                     description: The header field value
                                     type: string
                                 required:
-                                  - name
-                                  - value
+                                - name
+                                - value
                                 type: object
                               type: array
                             path:
@@ -168,8 +168,8 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                             scheme:
@@ -198,8 +198,8 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                           required:
@@ -231,8 +231,8 @@ spec:
                           protocol:
                             description: 'TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP once we''re generating v1 CRDs. Protocol used by the server listening on this port.'
                             enum:
-                              - TCP
-                              - UDP
+                            - TCP
+                            - UDP
                             type: string
                         required:
                         - containerPort
@@ -273,8 +273,8 @@ spec:
                                     description: The header field value
                                     type: string
                                 required:
-                                  - name
-                                  - value
+                                - name
+                                - value
                                 type: object
                               type: array
                             path:
@@ -282,8 +282,8 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                             scheme:
@@ -312,8 +312,8 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                           required:
@@ -414,12 +414,12 @@ spec:
                             type: object
                           type: array
                       required:
-                        - cpu
-                        - memory
+                      - cpu
+                      - memory
                       type: object
                   required:
-                    - image
-                    - name
+                  - image
+                  - name
                   type: object
                 type: array
               dependency:
@@ -429,16 +429,16 @@ spec:
                     kind:
                       description: Kind of the referenced object.
                       enum:
-                        - HelmRelease
-                        - ContainerizedWorkload
-                        - Third
+                      - HelmRelease
+                      - ContainerizedWorkload
+                      - Third
                       type: string
                     name:
                       description: Name of the referenced object.
                       type: string
                   required:
-                    - kind
-                    - name
+                  - kind
+                  - name
                   type: object
                 type: array
               nodeSelector:
@@ -449,7 +449,7 @@ spec:
               osType:
                 description: OperatingSystem required by this workload.
                 enum:
-                  - linux
+                - linux
                 - windows
                 type: string
               pointToGrayName:
