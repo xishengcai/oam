@@ -43,11 +43,20 @@ spec:
                     paths:
                       items:
                         properties:
+                          hostPath:
+                            type: string
                           name:
                             type: string
                           path:
                             type: string
                           persistentVolumeClaim:
+                            type: string
+                          size:
+                            type: string
+                          storageClassName:
+                            type: string
+                          type:
+                            description: 下面的字段废弃
                             type: string
                         required:
                           - name
