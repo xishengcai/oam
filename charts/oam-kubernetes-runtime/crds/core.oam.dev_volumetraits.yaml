@@ -43,22 +43,16 @@ spec:
                     paths:
                       items:
                         properties:
-                          hostPath:
-                            type: string
                           name:
                             type: string
                           path:
                             type: string
-                          size:
-                            type: string
-                          storageClassName:
-                            type: string
-                          type:
-                            description: type enum:"HostPath,StorageClass", default is StorageClass.
+                          persistentVolumeClaim:
                             type: string
                         required:
-                        - name
+                          - name
                         - path
+                          - persistentVolumeClaim
                         type: object
                       type: array
                   required:
