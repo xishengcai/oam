@@ -5,6 +5,20 @@ metadata:
 spec:
   components:
     - componentName: oam-component-hostpath
+      traits:
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: VolumeTrait
+            metadata:
+              name: oam-component-hostpath
+            spec:
+              volumeList:
+                - containerIndex: 0
+                  paths:
+                    - path: /var/log/test
+                      name: path-1
+                      persistentVolumeClaim: hp-1
+
   volumeClaims:
     - type: StorageClass
       storageClassName: hello

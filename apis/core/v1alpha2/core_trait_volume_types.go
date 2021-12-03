@@ -43,12 +43,6 @@ type PathItem struct {
 	Name                  string `json:"name"`
 	PersistentVolumeClaim string `json:"persistentVolumeClaim"`
 	Path                  string `json:"path"`
-
-	// 下面的字段废弃
-	Type             string `json:"type,omitempty"`
-	HostPath         string `json:"hostPath,omitempty"`
-	StorageClassName string `json:"storageClassName,omitempty"`
-	Size             string `json:"size,omitempty"`
 }
 
 // A VolumeTraitStatus represents the observed state of a

@@ -21,9 +21,12 @@ type VolumeClaimStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration"`
 
+	// +optional
 	runtimev1alpha1.ConditionedStatus `json:",inline"`
+	// Resources managed by this canary trait
+	Resources []runtimev1alpha1.TypedReference `json:"resources,omitempty"`
 
-	// LatestRevision of component
+	// LatestRevision of applicationConfig
 	// +optional
 	LatestRevision *Revision `json:"latestRevision,omitempty"`
 }

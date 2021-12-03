@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,9 +96,18 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), reconcileTimeout)
 	defer cancel()
 
+	var statusResources []cpv1alpha1.TypedReference
 	var volumeClaim oamv1alpha2.VolumeClaim
 	if err := r.Get(ctx, req.NamespacedName, &volumeClaim); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// find the resource object to record the event to, default is the parent appConfig.
+	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &volumeClaim)
+	if eventObj == nil {
+		// fallback to workload itself
+		klog.ErrorS(err, "Failed to find the parent resource", "volumeClaim", volumeClaim.Name)
+		eventObj = &volumeClaim
 	}
 
 	var pvc *v1.PersistentVolumeClaim
@@ -107,10 +118,12 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		Namespace: volumeClaim.Namespace,
 		OwnerReferences: []metav1.OwnerReference{
 			{
-				APIVersion: volumeClaim.APIVersion,
-				Kind:       volumeClaim.Kind,
-				Name:       volumeClaim.Name,
-				UID:        volumeClaim.UID,
+				APIVersion:         volumeClaim.APIVersion,
+				Kind:               volumeClaim.Kind,
+				Name:               volumeClaim.Name,
+				UID:                volumeClaim.UID,
+				Controller:         newTrue(false),
+				BlockOwnerDeletion: newTrue(true),
 			},
 		},
 	}
@@ -183,7 +196,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// apply pvc
-	_, err := r.clientSet.CoreV1().PersistentVolumeClaims(volumeClaim.Namespace).Get(ctx, volumeClaim.Name, metav1.GetOptions{})
+	pvcReturn, err := r.clientSet.CoreV1().PersistentVolumeClaims(volumeClaim.Namespace).Get(ctx, volumeClaim.Name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			_, err = r.clientSet.CoreV1().PersistentVolumeClaims(volumeClaim.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
@@ -192,6 +205,16 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 		}
 	}
+
+	r.record.Event(&volumeClaim, event.Normal("PVC created", fmt.Sprintf("successfully server side create a pvc `%s`", pvc.Name)))
+	statusResources = append(statusResources,
+		cpv1alpha1.TypedReference{
+			APIVersion: pvcReturn.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+			Kind:       pvcReturn.GetObjectKind().GroupVersionKind().Kind,
+			Name:       pvcReturn.GetName(),
+			UID:        pvcReturn.UID,
+		},
+	)
 
 	// if type == hostPath, apply
 	_, err = r.clientSet.CoreV1().PersistentVolumes().Get(ctx, volumeClaim.Name, metav1.GetOptions{})
@@ -204,5 +227,16 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
+	volumeClaim.Status.Resources = statusResources
+	volumeClaimTraitPatch := client.MergeFrom(volumeClaim.DeepCopyObject())
+	if err := r.Status().Patch(ctx, &volumeClaim, volumeClaimTraitPatch); err != nil {
+		klog.ErrorS(err, "failed to update volumeClaim")
+		return util.ReconcileWaitResult, err
+	}
+
 	return ctrl.Result{RequeueAfter: waitTime}, util.PatchCondition(ctx, r, &volumeClaim, cpv1alpha1.ReconcileSuccess())
+}
+
+func newTrue(b bool) *bool {
+	return &b
 }

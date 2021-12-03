@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
 	"k8s.io/klog/v2"
 
 	cpv1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
@@ -19,7 +17,6 @@ import (
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -171,8 +168,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		spec, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec")
 		oldVolumes := getVolumesFromSpec(spec)
 
-		var volumes []v1.Volume                 // 重新构建 volumes
-		var pvcList []*v1.PersistentVolumeClaim // 重新构建 pvc
+		volumes := make(map[string]v1.Volume, 0) // 重新构建 volumes
 
 		// volume 是列表， 因为可能有多个容器
 		// 从 sts or deploy中找出容器
@@ -182,30 +178,14 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		for _, item := range volumeTrait.Spec.VolumeList {
 			var volumeMounts []v1.VolumeMount
 			for _, path := range item.Paths {
-				pvcName := fmt.Sprintf("%s-%d-%s", res.GetName(), item.ContainerIndex, path.Name)
 				volumeMount := v1.VolumeMount{
-					Name:      pvcName,
+					Name:      path.Name,
 					MountPath: path.Path,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
-				switch path.Type {
-				case "HostPath":
-					hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
-					volumes = append(volumes, v1.Volume{
-						Name: pvcName,
-						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{
-								Path: path.HostPath,
-								Type: &hostPathDirectoryOrCreate,
-							},
-						},
-					})
-				default:
-					volumes = append(volumes, v1.Volume{
-						Name:         pvcName,
-						VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
-					})
-					pvcList = append(pvcList, generatePVC(path, pvcName, volumeTrait))
+				volumes[path.PersistentVolumeClaim] = v1.Volume{
+					Name:         path.Name,
+					VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: path.PersistentVolumeClaim}},
 				}
 			}
 			if item.ContainerIndex > len(containers.([]interface{}))-1 {
@@ -215,47 +195,21 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 			oldVolumeMounts := getVolumeMountsFromContainer(c)
 
 			// 找出非pvc,hostPath 的volumeMounts
-			volumeMounts = append(volumeMounts, getHasPvcVolumeMounts(oldVolumes, oldVolumeMounts)...)
+			volumeMounts = append(volumeMounts, findConfigVolumes(oldVolumes, oldVolumeMounts)...)
 
 			c["volumeMounts"] = volumeMounts
 		}
 		// 继续构建volumes， 遍历old volumes， 找到pvc == nil的，追加到数组中
-		volumes = mergeVolumes(oldVolumes, volumes)
-		spec.(map[string]interface{})["volumes"] = volumes
+		volumeArray := mergeVolumes(oldVolumes, volumes)
+		spec.(map[string]interface{})["volumes"] = volumeArray
 
-		// 多容器时， 对每个容器遍历，删除之前有pvc，但是现在没有的
-		for _, ci := range containers.([]interface{}) {
-			c := ci.(map[string]interface{})
-			vms := getVolumeMountsFromContainer(c)
-			newVms := filterVolumeMounts(volumes, vms)
-			c["volumeMounts"] = newVms
-		}
-
-		var pvcNameList []string
-		for _, pvc := range pvcList {
-			pvcTemp, err := r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{})
-			if err != nil {
-				if apierrors.IsNotFound(err) {
-					pvcTemp, err = r.clientSet.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
-					if err != nil {
-						klog.ErrorS(err, "Create pvc failed", "pvcName", pvc.Name)
-						return util.ReconcileWaitResult, err
-					}
-				}
-			}
-			r.record.Event(appConfig, event.Normal("PVC created",
-				fmt.Sprintf("VolumeTrait `%s` successfully server side create a pvc `%s`",
-					volumeTrait.Name, pvc.Name)))
-			pvcNameList = append(pvcNameList, pvc.Name)
-			statusResources = append(statusResources,
-				cpv1alpha1.TypedReference{
-					APIVersion: pvcTemp.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:       pvcTemp.GetObjectKind().GroupVersionKind().Kind,
-					Name:       pvcTemp.GetName(),
-					UID:        pvcTemp.UID,
-				},
-			)
-		}
+		//// 多容器时， 对每个容器遍历，删除之前有pvc，但是现在没有的
+		//for _, ci := range containers.([]interface{}) {
+		//	c := ci.(map[string]interface{})
+		//	vms := getVolumeMountsFromContainer(c)
+		//	newVms := filterVolumeMounts(volumes, vms)
+		//	c["volumeMounts"] = newVms
+		//}
 
 		// merge patch to modify the resource
 		if err := r.Patch(ctx, res, resPatch, client.FieldOwner(volumeTrait.GetUID())); err != nil {
@@ -263,11 +217,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 			return util.ReconcileWaitResult, err
 		}
 
-		if err := r.cleanupResources(ctx, volumeTrait, pvcNameList); err != nil {
-			klog.ErrorS(err, "Failed to clean up resources")
-			r.record.Event(appConfig, event.Warning(errApplyPVC, err))
-			return util.ReconcileWaitResult, err
-		}
 		klog.InfoS("Successfully patch a resource", "resource GVK", res.GroupVersionKind().String(),
 			"res UID", res.GetUID(), "target volumeClaimTemplates", volumeTrait.Spec.VolumeList)
 	}
@@ -308,9 +257,8 @@ func getVolumesFromSpec(spec interface{}) (vls []v1.Volume) {
 	return
 }
 
-// getHasPvcVolumeMounts 找出非pvc,hostPath 的volumeMounts
-//
-func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMounts []v1.VolumeMount) {
+// findConfigVolumes 找出非pvc,hostPath 的volumeMounts
+func findConfigVolumes(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMounts []v1.VolumeMount) {
 	for _, x := range vls {
 		if x.PersistentVolumeClaim != nil || x.HostPath != nil {
 			continue
@@ -324,60 +272,19 @@ func getHasPvcVolumeMounts(vls []v1.Volume, vms []v1.VolumeMount) (noPvcVolumeMo
 	return
 }
 
-func mergeVolumes(olds, news []v1.Volume) []v1.Volume {
+// mergeVolumes merge configMap volumes to new volumes
+func mergeVolumes(olds []v1.Volume, news map[string]v1.Volume) []v1.Volume {
 	for _, x := range olds {
 		if x.PersistentVolumeClaim != nil || x.HostPath != nil {
 			continue
 		}
-		news = append(news, x)
+		news[x.Name] = x
 	}
-	return news
-}
-
-func filterVolumeMounts(vlms []v1.Volume, vms []v1.VolumeMount) (newVms []v1.VolumeMount) {
-	for _, x := range vms {
-		for _, j := range vlms {
-			if x.Name == j.Name {
-				newVms = append(newVms, x)
-			}
-		}
+	result := make([]v1.Volume, 0)
+	for _, v := range news {
+		result = append(result, v)
 	}
-	return
-}
-
-func generatePVC(p oamv1alpha2.PathItem, pvcName string, volumeTrait *oamv1alpha2.VolumeTrait) *v1.PersistentVolumeClaim {
-	return &v1.PersistentVolumeClaim{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       util.KindPersistentVolumeClaim,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pvcName,
-			Namespace: volumeTrait.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         volumeTrait.APIVersion,
-					Kind:               volumeTrait.Kind,
-					Name:               volumeTrait.Name,
-					UID:                volumeTrait.UID,
-					Controller:         newTrue(false),
-					BlockOwnerDeletion: newTrue(true),
-				},
-			},
-		},
-		Spec: v1.PersistentVolumeClaimSpec{
-			// can't use &path.StorageClassName
-			StorageClassName: &p.StorageClassName,
-			AccessModes: []v1.PersistentVolumeAccessMode{
-				v1.ReadWriteOnce,
-			},
-			Resources: v1.ResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceStorage: resource.MustParse(p.Size),
-				},
-			},
-		},
-	}
+	return result
 }
 
 func newTrue(b bool) *bool {
