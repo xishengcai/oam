@@ -376,6 +376,9 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	PointToGrayName *string `json:"pointToGrayName,omitempty"`
 
+	// InitContainers of which this workload initContainers.
+	InitContainers []Container `json:"initContainers"`
+
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
 

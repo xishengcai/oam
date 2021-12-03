@@ -167,12 +167,12 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		cpmeta.AddOwnerReference(res, ownerRef)
 		spec, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec")
 		oldVolumes := getVolumesFromSpec(spec)
-
 		volumes := make(map[string]v1.Volume, 0) // 重新构建 volumes
 
 		// volume 是列表， 因为可能有多个容器
 		// 从 sts or deploy中找出容器
 		containers, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec", "containers")
+		initContainers, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec", "initContainers")
 
 		// 遍历挂载特性中的VolumeList字段
 		for _, item := range volumeTrait.Spec.VolumeList {
@@ -191,25 +191,23 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 			if item.ContainerIndex > len(containers.([]interface{}))-1 {
 				return ctrl.Result{}, fmt.Errorf("container Index out of range")
 			}
-			c, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
-			oldVolumeMounts := getVolumeMountsFromContainer(c)
-
-			// 找出非pvc,hostPath 的volumeMounts
-			volumeMounts = append(volumeMounts, findConfigVolumes(oldVolumes, oldVolumeMounts)...)
-
-			c["volumeMounts"] = volumeMounts
+			container, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
+			initContainer, _ := initContainers.([]interface{})[item.ContainerIndex].(map[string]interface{})
+			if item.IsInitContainer {
+				oldVolumeMounts := getVolumeMountsFromContainer(initContainer)
+				// 找出非pvc,hostPath 的volumeMounts
+				volumeMounts = append(volumeMounts, findConfigVolumes(oldVolumes, oldVolumeMounts)...)
+				initContainer["volumeMounts"] = volumeMounts
+			} else {
+				oldVolumeMounts := getVolumeMountsFromContainer(container)
+				// 找出非pvc,hostPath 的volumeMounts
+				volumeMounts = append(volumeMounts, findConfigVolumes(oldVolumes, oldVolumeMounts)...)
+				container["volumeMounts"] = volumeMounts
+			}
 		}
 		// 继续构建volumes， 遍历old volumes， 找到pvc == nil的，追加到数组中
 		volumeArray := mergeVolumes(oldVolumes, volumes)
 		spec.(map[string]interface{})["volumes"] = volumeArray
-
-		//// 多容器时， 对每个容器遍历，删除之前有pvc，但是现在没有的
-		//for _, ci := range containers.([]interface{}) {
-		//	c := ci.(map[string]interface{})
-		//	vms := getVolumeMountsFromContainer(c)
-		//	newVms := filterVolumeMounts(volumes, vms)
-		//	c["volumeMounts"] = newVms
-		//}
 
 		// merge patch to modify the resource
 		if err := r.Patch(ctx, res, resPatch, client.FieldOwner(volumeTrait.GetUID())); err != nil {

@@ -34,8 +34,9 @@ type VolumeTraitSpec struct {
 
 // VolumeMountItem contains path of container
 type VolumeMountItem struct {
-	ContainerIndex int        `json:"containerIndex"`
-	Paths          []PathItem `json:"paths"`
+	ContainerIndex  int        `json:"containerIndex"`
+	IsInitContainer bool       `json:"isInitContainer,omitempty"`
+	Paths           []PathItem `json:"paths"`
 }
 
 // PathItem define storageClass, size, path, name

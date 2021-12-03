@@ -14,9 +14,16 @@ spec:
             spec:
               volumeList:
                 - containerIndex: 0
+                  isInitContainer: false
                   paths:
                     - path: /var/log/test
-                      name: path-1
+                      name: html
+                      persistentVolumeClaim: hp-1
+                - containerIndex: 0
+                  isInitContainer: true
+                  paths:
+                    - path: /var/log/a
+                      name: html
                       persistentVolumeClaim: hp-1
 
   volumeClaims:

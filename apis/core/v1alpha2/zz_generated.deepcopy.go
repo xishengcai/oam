@@ -853,6 +853,13 @@ func (in *ContainerizedWorkloadSpec) DeepCopyInto(out *ContainerizedWorkloadSpec
 		*out = new(string)
 		**out = **in
 	}
+	if in.InitContainers != nil {
+		in, out := &in.InitContainers, &out.InitContainers
+		*out = make([]Container, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Containers != nil {
 		in, out := &in.Containers, &out.Containers
 		*out = make([]Container, len(*in))
@@ -1862,6 +1869,11 @@ func (in *VolumeClaimSpec) DeepCopy() *VolumeClaimSpec {
 func (in *VolumeClaimStatus) DeepCopyInto(out *VolumeClaimStatus) {
 	*out = *in
 	in.ConditionedStatus.DeepCopyInto(&out.ConditionedStatus)
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = make([]v1alpha1.TypedReference, len(*in))
+		copy(*out, *in)
+	}
 	if in.LatestRevision != nil {
 		in, out := &in.LatestRevision, &out.LatestRevision
 		*out = new(Revision)

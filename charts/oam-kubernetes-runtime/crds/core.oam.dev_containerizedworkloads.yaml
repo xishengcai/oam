@@ -429,16 +429,395 @@ spec:
                     kind:
                       description: Kind of the referenced object.
                       enum:
-                      - HelmRelease
+                        - HelmRelease
                       - ContainerizedWorkload
-                      - Third
+                        - Third
                       type: string
                     name:
                       description: Name of the referenced object.
                       type: string
                   required:
-                  - kind
-                  - name
+                    - kind
+                    - name
+                  type: object
+                type: array
+              initContainers:
+                description: InitContainers of which this workload initContainers.
+                items:
+                  description: A Container represents an Open Containers Initiative (OCI) container.
+                  properties:
+                    args:
+                      description: Arguments to be passed to the command run by this container.
+                      items:
+                        type: string
+                      type: array
+                    command:
+                      description: Command to be run by this container.
+                      items:
+                        type: string
+                      type: array
+                    config:
+                      description: ConfigFiles that should be written within this container.
+                      items:
+                        description: A ContainerConfigFile specifies a configuration file that should be written within a container.
+                        properties:
+                          fromSecret:
+                            description: FromSecret is a secret key reference which can be used to assign a value to be written to the configuration file at the given path in the container.
+                            properties:
+                              key:
+                                description: The key to select.
+                                type: string
+                              name:
+                                description: The name of the secret.
+                                type: string
+                            required:
+                              - key
+                              - name
+                            type: object
+                          path:
+                            description: Path within the container at which the configuration file should be written.
+                            type: string
+                          subPath:
+                            description: Path within the volume from which the container's volume should be mounted. Defaults to "" (volume's root).
+                            type: boolean
+                          value:
+                            description: Value that should be written to the configuration file.
+                            type: string
+                        required:
+                          - path
+                          - value
+                        type: object
+                      type: array
+                    env:
+                      description: Environment variables that should be set within this container.
+                      items:
+                        description: A ContainerEnvVar specifies an environment variable that should be set within a container.
+                        properties:
+                          fromSecret:
+                            description: FromSecret is a secret key reference which can be used to assign a value to the environment variable.
+                            properties:
+                              key:
+                                description: The key to select.
+                                type: string
+                              name:
+                                description: The name of the secret.
+                                type: string
+                            required:
+                              - key
+                              - name
+                            type: object
+                          name:
+                            description: Name of the environment variable. Must be composed of valid Unicode letter and number characters, as well as _ and -.
+                            pattern: ^[-_a-zA-Z0-9]+$
+                            type: string
+                          value:
+                            description: Value of the environment variable.
+                            type: string
+                        required:
+                          - name
+                        type: object
+                      type: array
+                    image:
+                      description: Image this container should run. Must be a path-like or URI-like representation of an OCI image. May be prefixed with a registry address and should be suffixed with a tag.
+                      type: string
+                    imagePullSecret:
+                      description: ImagePullSecret specifies the name of a Secret from which the credentials required to pull this container's image can be loaded.
+                      type: string
+                    livenessProbe:
+                      description: A LivenessProbe assesses whether this container is alive. Containers that fail liveness probes will be restarted.
+                      properties:
+                        exec:
+                          description: One and only one of the following should be specified. Exec specifies the action to take.
+                          properties:
+                            command:
+                              description: Command is the command line to execute inside the container, the working directory for the command  is root ('/') in the container's filesystem. The command is simply exec'd, it is not run inside a shell, so traditional shell instructions ('|', etc) won't work. To use a shell, you need to explicitly call out to that shell. Exit status of 0 is treated as live/healthy and non-zero is unhealthy.
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                        failureThreshold:
+                          description: Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.
+                          format: int32
+                          type: integer
+                        httpGet:
+                          description: HTTPGet specifies the http request to perform.
+                          properties:
+                            host:
+                              description: Host name to connect to, defaults to the pod IP. You probably want to set "Host" in httpHeaders instead.
+                              type: string
+                            httpHeaders:
+                              description: Custom headers to set in the request. HTTP allows repeated headers.
+                              items:
+                                description: HTTPHeader describes a custom header to be used in HTTP probes
+                                properties:
+                                  name:
+                                    description: The header field name
+                                    type: string
+                                  value:
+                                    description: The header field value
+                                    type: string
+                                required:
+                                  - name
+                                  - value
+                                type: object
+                              type: array
+                            path:
+                              description: Path to access on the HTTP server.
+                              type: string
+                            port:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                              x-kubernetes-int-or-string: true
+                            scheme:
+                              description: Scheme to use for connecting to the host. Defaults to HTTP.
+                              type: string
+                          required:
+                            - port
+                          type: object
+                        initialDelaySeconds:
+                          description: 'Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                          format: int32
+                          type: integer
+                        periodSeconds:
+                          description: How often (in seconds) to perform the probe. Default to 10 seconds. Minimum value is 1.
+                          format: int32
+                          type: integer
+                        successThreshold:
+                          description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
+                          format: int32
+                          type: integer
+                        tcpSocket:
+                          description: 'TCPSocket specifies an action involving a TCP port. TCP hooks not yet supported TODO: implement a realistic TCP lifecycle hook'
+                          properties:
+                            host:
+                              description: 'Optional: Host name to connect to, defaults to the pod IP.'
+                              type: string
+                            port:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                              x-kubernetes-int-or-string: true
+                          required:
+                            - port
+                          type: object
+                        timeoutSeconds:
+                          description: 'Number of seconds after which the probe times out. Defaults to 1 second. Minimum value is 1. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                          format: int32
+                          type: integer
+                      type: object
+                    name:
+                      description: Name of this container. Must be unique within its workload.
+                      type: string
+                    ports:
+                      description: Ports exposed by this container.
+                      items:
+                        description: A ContainerPort specifies a port that is exposed by a container.
+                        properties:
+                          containerPort:
+                            description: Port number. Must be unique within its container.
+                            format: int32
+                            type: integer
+                          hostPort:
+                            description: Number of port to expose on the host. If specified, this must be a valid port number, 0 < x < 65536. If HostNetwork is specified, this must match ContainerPort. Most containers do not need this.
+                            format: int32
+                            type: integer
+                          name:
+                            type: string
+                          protocol:
+                            description: 'TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP once we''re generating v1 CRDs. Protocol used by the server listening on this port.'
+                            enum:
+                              - TCP
+                              - UDP
+                            type: string
+                        required:
+                          - containerPort
+                          - name
+                        type: object
+                      type: array
+                    readinessProbe:
+                      description: A ReadinessProbe assesses whether this container is ready to serve requests. Containers that fail readiness probes will be withdrawn from service.
+                      properties:
+                        exec:
+                          description: One and only one of the following should be specified. Exec specifies the action to take.
+                          properties:
+                            command:
+                              description: Command is the command line to execute inside the container, the working directory for the command  is root ('/') in the container's filesystem. The command is simply exec'd, it is not run inside a shell, so traditional shell instructions ('|', etc) won't work. To use a shell, you need to explicitly call out to that shell. Exit status of 0 is treated as live/healthy and non-zero is unhealthy.
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                        failureThreshold:
+                          description: Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.
+                          format: int32
+                          type: integer
+                        httpGet:
+                          description: HTTPGet specifies the http request to perform.
+                          properties:
+                            host:
+                              description: Host name to connect to, defaults to the pod IP. You probably want to set "Host" in httpHeaders instead.
+                              type: string
+                            httpHeaders:
+                              description: Custom headers to set in the request. HTTP allows repeated headers.
+                              items:
+                                description: HTTPHeader describes a custom header to be used in HTTP probes
+                                properties:
+                                  name:
+                                    description: The header field name
+                                    type: string
+                                  value:
+                                    description: The header field value
+                                    type: string
+                                required:
+                                  - name
+                                  - value
+                                type: object
+                              type: array
+                            path:
+                              description: Path to access on the HTTP server.
+                              type: string
+                            port:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                              x-kubernetes-int-or-string: true
+                            scheme:
+                              description: Scheme to use for connecting to the host. Defaults to HTTP.
+                              type: string
+                          required:
+                            - port
+                          type: object
+                        initialDelaySeconds:
+                          description: 'Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                          format: int32
+                          type: integer
+                        periodSeconds:
+                          description: How often (in seconds) to perform the probe. Default to 10 seconds. Minimum value is 1.
+                          format: int32
+                          type: integer
+                        successThreshold:
+                          description: Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
+                          format: int32
+                          type: integer
+                        tcpSocket:
+                          description: 'TCPSocket specifies an action involving a TCP port. TCP hooks not yet supported TODO: implement a realistic TCP lifecycle hook'
+                          properties:
+                            host:
+                              description: 'Optional: Host name to connect to, defaults to the pod IP.'
+                              type: string
+                            port:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                              x-kubernetes-int-or-string: true
+                          required:
+                            - port
+                          type: object
+                        timeoutSeconds:
+                          description: 'Number of seconds after which the probe times out. Defaults to 1 second. Minimum value is 1. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                          format: int32
+                          type: integer
+                      type: object
+                    resources:
+                      description: Resources required by this container
+                      properties:
+                        cpu:
+                          description: CPU required by this container.
+                          properties:
+                            required:
+                              description: Required CPU count. 1.0 represents one CPU core.
+                              type: string
+                          required:
+                            - required
+                          type: object
+                        extended:
+                          description: Extended resources required by this container.
+                          items:
+                            description: ExtendedResource required by a container.
+                            properties:
+                              name:
+                                description: Name of the external resource. Resource names are specified in kind.group/version format, e.g. motionsensor.ext.example.com/v1.
+                                type: string
+                              required:
+                                anyOf:
+                                  - type: integer
+                                  - type: string
+                                description: Required extended resource(s), e.g. 8 or "very-cool-widget"
+                                x-kubernetes-int-or-string: true
+                            required:
+                              - name
+                              - required
+                            type: object
+                          type: array
+                        gpu:
+                          description: GPU required by this container.
+                          properties:
+                            required:
+                              description: Required GPU count.
+                              type: string
+                          required:
+                            - required
+                          type: object
+                        memory:
+                          description: Memory required by this container.
+                          properties:
+                            required:
+                              description: Required memory.
+                              type: string
+                          required:
+                            - required
+                          type: object
+                        volumes:
+                          description: Volumes required by this container.
+                          items:
+                            description: VolumeResource required by a container.
+                            properties:
+                              accessMode:
+                                description: AccessMode of this volume; RO (read only) or RW (read and write).
+                                enum:
+                                  - RO
+                                  - RW
+                                type: string
+                              disk:
+                                description: Disk requirements of this volume.
+                                properties:
+                                  ephemeral:
+                                    description: Ephemeral specifies whether an external disk needs to be mounted.
+                                    type: boolean
+                                  required:
+                                    description: Required disk space.
+                                    type: string
+                                required:
+                                  - required
+                                type: object
+                              mountPath:
+                                description: MountPath at which this volume will be mounted within its container.
+                                type: string
+                              name:
+                                description: Name of this volume. Must be unique within its container.
+                                type: string
+                              sharingPolicy:
+                                description: SharingPolicy of this volume; Exclusive or Shared.
+                                enum:
+                                  - Exclusive
+                                  - Shared
+                                type: string
+                            required:
+                              - mountPath
+                              - name
+                            type: object
+                          type: array
+                      required:
+                        - cpu
+                        - memory
+                      type: object
+                  required:
+                    - image
+                    - name
                   type: object
                 type: array
               nodeSelector:
@@ -449,8 +828,8 @@ spec:
               osType:
                 description: OperatingSystem required by this workload.
                 enum:
-                - linux
-                - windows
+                  - linux
+                  - windows
                 type: string
               pointToGrayName:
                 description: old grey workload name need modify match selector
@@ -459,7 +838,8 @@ spec:
                 description: check add istio label
                 type: boolean
             required:
-            - containers
+              - containers
+              - initContainers
             type: object
           status:
             description: A ContainerizedWorkloadStatus represents the observed state of a ContainerizedWorkload.

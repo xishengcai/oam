@@ -15,3 +15,7 @@ spec:
           ports:
             - containerPort: 80
               name: http
+      initContainers:
+        - name: nginx
+          image: nginx
+          command: [ "ls" ]
