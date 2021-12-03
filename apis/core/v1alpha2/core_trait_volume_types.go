@@ -33,8 +33,9 @@ type VolumeTraitSpec struct {
 }
 
 type VolumeMountItem struct {
-	ContainerIndex int        `json:"containerIndex"`
-	Paths          []PathItem `json:"paths"`
+	ContainerIndex  int        `json:"containerIndex"`
+	IsInitContainer bool       `json:"isInitContainer"`
+	Paths           []PathItem `json:"paths"`
 }
 
 type PathItem struct {
