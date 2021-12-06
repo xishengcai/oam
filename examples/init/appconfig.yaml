@@ -1,0 +1,20 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: app-3002801356
+spec:
+  components:
+    - componentName: test
+      traits:
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: ManualScalerTrait
+            metadata:
+              name: test
+              namespace: prj-3155808628
+            spec:
+              replicaCount: 1
+              workloadRef:
+                apiVersion: ""
+                kind: ""
+                name: ""

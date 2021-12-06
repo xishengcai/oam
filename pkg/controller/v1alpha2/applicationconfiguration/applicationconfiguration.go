@@ -77,6 +77,8 @@ type OAMApplicationReconciler struct {
 	record        event.Recorder
 	applyOnceOnly bool
 	syncTime      time.Duration
+	preHooks      map[string]ControllerHooks
+	postHooks     map[string]ControllerHooks
 }
 
 // NewReconciler returns an OAMApplicationReconciler that reconciles ApplicationConfigurations
@@ -96,8 +98,10 @@ func NewReconciler(m ctrl.Manager, dm discoverymapper.DiscoveryMapper, o ...Reco
 			applicator: apply.NewAPIApplicator(m.GetClient()),
 		},
 
-		gc:     GarbageCollectorFn(eligible),
-		record: event.NewNopRecorder(),
+		gc:        GarbageCollectorFn(eligible),
+		record:    event.NewNopRecorder(),
+		preHooks:  make(map[string]ControllerHooks),
+		postHooks: make(map[string]ControllerHooks),
 		workloads: &workloads{
 			applicator: apply.NewAPIApplicator(m.GetClient()),
 			rawClient:  m.GetClient(),
@@ -128,6 +132,35 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	acPatch := ac.DeepCopy()
 	if err := r.handleDeleteTimeStamp(ctx, ac); err != nil {
 		return reconcile.Result{}, err
+	}
+	// execute the posthooks at the end no matter what
+	defer func() {
+		updateObservedGeneration(ac)
+		for name, hook := range r.postHooks {
+			exeResult, err := hook.Exec(ctx, ac)
+			if err != nil {
+				klog.ErrorS(err, "Failed to execute post-hooks", "hook name", name, "requeue-after", result.RequeueAfter)
+				r.record.Event(ac, event.Warning(reasonCannotExecutePosthooks, err))
+				ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePosthooks)))
+				result = exeResult
+				returnErr = errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+				return
+			}
+			r.record.Event(ac, event.Normal(reasonExecutePosthook, "Successfully executed a posthook", "posthook name", name))
+		}
+		returnErr = errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+	}()
+
+	// execute the prehooks
+	for name, hook := range r.preHooks {
+		result, err := hook.Exec(ctx, ac)
+		if err != nil {
+			klog.ErrorS(err, "Failed to execute pre-hooks", "hook name", name)
+			r.record.Event(ac, event.Warning(reasonCannotExecutePrehooks, err))
+			ac.SetConditions(v1alpha1.ReconcileError(errors.Wrap(err, errExecutePrehooks)))
+			return result, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+		}
+		r.record.Event(ac, event.Normal(reasonExecutePrehook, "Successfully executed a prehook", "prehook name ", name))
 	}
 
 	workloads, depStatus, err := r.components.Render(ctx, ac)

@@ -11,24 +11,10 @@ spec:
           value: component-dev1
         - name: image
           value: wordpress:php7.2
-    - componentName: component-dep
-      parameterValues:
-        - name: instance-name
-          value: component-dev2
-        - name: image
-          value: wordpress:php7.2
-      traits:
-        - trait:
-            apiVersion: core.oam.dev/v1alpha2
-            kind: VolumeTrait
-            metadata:
-              name: component-dev2
-            spec:
-              volumeList:
-              - containerIndex: 0
-                paths:
-                - size: 20Gi
-                  path: /var/log/test
-                  storageClassName: alicloud-disk
-                  name: path-1
+#    - componentName: component-dep
+#      parameterValues:
+#        - name: instance-name
+#          value: component-dev2
+#        - name: image
+#          value: wordpress:php7.2
 
