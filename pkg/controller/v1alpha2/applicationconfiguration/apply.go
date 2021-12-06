@@ -18,6 +18,10 @@ package applicationconfiguration
 
 import (
 	"context"
+	"fmt"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/pkg/errors"
 
@@ -30,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
+	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/pkg/oam/discoverymapper"
 	"github.com/xishengcai/oam/pkg/oam/util"
 	"github.com/xishengcai/oam/util/apply"
@@ -174,8 +179,7 @@ func findDereferencedScopes(statusScopes []v1alpha2.WorkloadScope, scopes []unst
 	return toBeDeferenced
 }
 
-func (a *workloads) applyScope(ctx context.Context, wl Workload, s unstructured.Unstructured,
-	workloadRef runtimev1alpha1.TypedReference) error {
+func (a *workloads) applyScope(ctx context.Context, wl Workload, s unstructured.Unstructured, workloadRef runtimev1alpha1.TypedReference) error {
 	// get ScopeDefinition
 	scopeDefinition, err := util.FetchScopeDefinition(ctx, a.rawClient, a.dm, &s)
 	if err != nil {
@@ -274,4 +278,45 @@ func (a *workloads) applyScopeRemoval(ctx context.Context, namespace string, wr 
 			scopeObject.GetAPIVersion(), scopeObject.GetKind(), scopeObject.GetName(), workloadRefsPath)
 	}
 	return nil
+}
+
+// GenerationUnchanged indicates the resource being applied has no generation changed
+// comparing to the existing one.
+type GenerationUnchanged struct{}
+
+func (e *GenerationUnchanged) Error() string {
+	return fmt.Sprint("apply-only-once enabled,",
+		"and detect generation in the annotation unchanged, will not apply.",
+		"Please ignore this error in other logic.")
+}
+
+func applyOnceOnly() apply.ApplyOption {
+	return func(ctx context.Context, current, desired runtime.Object) error {
+		// ApplyOption only works for update/patch operation and will be ignored
+		// if the object doesn't exist before.
+		c, _ := current.(metav1.Object)
+		d, _ := desired.(metav1.Object)
+		if c == nil || d == nil {
+			return errors.Errorf("invalid object being applied: %q ",
+				desired.GetObjectKind().GroupVersionKind())
+		}
+		cLabels, dLabels := c.GetLabels(), d.GetLabels()
+		if dLabels[oam.LabelOAMResourceType] == oam.ResourceTypeWorkload ||
+			dLabels[oam.LabelOAMResourceType] == oam.ResourceTypeTrait {
+			// check whether spec changes occur on the workload or trait,
+			// according to annotations and lables
+			if c.GetAnnotations()[oam.AnnotationAppGeneration] !=
+				d.GetAnnotations()[oam.AnnotationAppGeneration] {
+				return nil
+			}
+			if cLabels[oam.LabelAppComponentRevision] != dLabels[oam.LabelAppComponentRevision] ||
+				cLabels[oam.LabelAppComponent] != dLabels[oam.LabelAppComponent] ||
+				cLabels[oam.LabelAppName] != dLabels[oam.LabelAppName] {
+				return nil
+			}
+			// return an error to abort current apply
+			return &GenerationUnchanged{}
+		}
+		return nil
+	}
 }

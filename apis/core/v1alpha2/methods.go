@@ -22,6 +22,16 @@ import (
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 )
 
+// SetConditions of this VolumeClaim.
+func (tr *VolumeClaim) SetConditions(c ...runtimev1alpha1.Condition) {
+	tr.Status.SetConditions(c...)
+}
+
+// GetCondition of this VolumeClaim.
+func (tr *VolumeClaim) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
+	return tr.Status.GetCondition(ct)
+}
+
 // GetCondition of this ManualScalerTrait.
 func (tr *ManualScalerTrait) GetCondition(ct runtimev1alpha1.ConditionType) runtimev1alpha1.Condition {
 	return tr.Status.GetCondition(ct)

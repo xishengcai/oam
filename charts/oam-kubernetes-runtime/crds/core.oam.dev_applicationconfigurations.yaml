@@ -232,8 +232,29 @@ spec:
                       type: array
                   type: object
                 type: array
+              volumeClaims:
+                items:
+                  properties:
+                    hostPath:
+                      type: string
+                    name:
+                      type: string
+                    size:
+                      type: string
+                    storageClassName:
+                      type: string
+                    type:
+                      enum:
+                        - HostPath
+                        - StorageClass
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
             required:
             - components
+            - volumeClaims
             type: object
           status:
             description: An ApplicationConfigurationStatus represents the observed state of a ApplicationConfiguration.

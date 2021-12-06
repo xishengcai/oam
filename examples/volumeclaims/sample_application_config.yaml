@@ -1,0 +1,38 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-hostpath
+spec:
+  components:
+    - componentName: oam-component-hostpath
+      traits:
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: VolumeTrait
+            metadata:
+              name: oam-component-hostpath
+            spec:
+              volumeList:
+                - containerIndex: 0
+                  isInitContainer: false
+                  paths:
+                    - path: /var/log/test
+                      name: html
+                      persistentVolumeClaim: hp-1
+                - containerIndex: 0
+                  isInitContainer: true
+                  paths:
+                    - path: /var/log/a
+                      name: html
+                      persistentVolumeClaim: hp-1
+
+  volumeClaims:
+    - type: StorageClass
+      storageClassName: hello
+      name: sc-1
+      size: 10Gi
+    - type: HostPath
+      hostPath: /data/opt/xxx
+      name: hp-1
+
+

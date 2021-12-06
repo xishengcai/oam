@@ -76,6 +76,87 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 	modifyLabelSelector(cw.Spec.PointToGrayName, d)
 	setNodeSelect(cw, d)
 
+	for _, container := range cw.Spec.InitContainers {
+		if container.ImagePullSecret != nil {
+			d.Spec.Template.Spec.ImagePullSecrets = append(d.Spec.Template.Spec.ImagePullSecrets, corev1.LocalObjectReference{
+				Name: *container.ImagePullSecret,
+			})
+		}
+		kubernetesContainer := corev1.Container{
+			Name:            container.Name,
+			Image:           container.Image,
+			Command:         container.Command,
+			Args:            container.Arguments,
+			ImagePullPolicy: corev1.PullAlways,
+		}
+
+		if container.LivenessProbe != nil {
+			kubernetesContainer.LivenessProbe = container.LivenessProbe
+		}
+
+		if container.ReadinessProbe != nil {
+			kubernetesContainer.ReadinessProbe = container.ReadinessProbe
+		}
+
+		if container.Resources != nil {
+			kubernetesContainer.Resources = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    container.Resources.CPU.Required,
+					corev1.ResourceMemory: container.Resources.Memory.Required,
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    container.Resources.CPU.Required,
+					corev1.ResourceMemory: container.Resources.Memory.Required,
+				},
+			}
+			for _, v := range container.Resources.Volumes {
+				mount := corev1.VolumeMount{
+					Name:      v.Name,
+					MountPath: v.MountPath,
+				}
+				if v.AccessMode != nil && *v.AccessMode == v1alpha2.VolumeAccessModeRO {
+					mount.ReadOnly = true
+				}
+				kubernetesContainer.VolumeMounts = append(kubernetesContainer.VolumeMounts, mount)
+			}
+		}
+
+		for _, e := range container.Environment {
+			if e.Value != nil {
+				kubernetesContainer.Env = append(kubernetesContainer.Env, corev1.EnvVar{
+					Name:  e.Name,
+					Value: *e.Value,
+				})
+				continue
+			}
+			if e.FromSecret != nil {
+				kubernetesContainer.Env = append(kubernetesContainer.Env, corev1.EnvVar{
+					Name: e.Name,
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							Key: e.FromSecret.Key,
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: e.FromSecret.Name,
+							},
+						},
+					},
+				})
+			}
+		}
+
+		vmMap := map[string]struct{}{}
+		for _, c := range container.ConfigFiles {
+			v, vm := translateConfigFileToVolume(c, w.GetName(), container.Name)
+			if _, ok := vmMap[vm.Name]; ok {
+				continue
+			}
+			vmMap[vm.Name] = struct{}{}
+			kubernetesContainer.VolumeMounts = append(kubernetesContainer.VolumeMounts, vm)
+			d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, v)
+		}
+		d.Spec.Template.Spec.InitContainers = append(d.Spec.Template.Spec.InitContainers, kubernetesContainer)
+	}
+
 	for _, container := range cw.Spec.Containers {
 		if container.ImagePullSecret != nil {
 			d.Spec.Template.Spec.ImagePullSecrets = append(d.Spec.Template.Spec.ImagePullSecrets, corev1.LocalObjectReference{
