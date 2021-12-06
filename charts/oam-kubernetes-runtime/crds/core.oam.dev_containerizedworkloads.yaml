@@ -839,7 +839,6 @@ spec:
                 type: boolean
             required:
               - containers
-              - initContainers
             type: object
           status:
             description: A ContainerizedWorkloadStatus represents the observed state of a ContainerizedWorkload.
