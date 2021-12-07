@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xishengcai/oam/pkg/oam"
+
 	"k8s.io/klog/v2"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,7 +53,7 @@ func Setup(mgr ctrl.Manager, _ controller.Args) error {
 		clientSet:       clientSet,
 		Client:          mgr.GetClient(),
 		DiscoveryClient: *discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig()),
-		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeTrait")),
+		record:          event.NewAPIRecorder(mgr.GetEventRecorderFor("volumeClaim")),
 		Scheme:          mgr.GetScheme(),
 		dm:              dm,
 	}
@@ -126,6 +128,9 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				BlockOwnerDeletion: newTrue(true),
 			},
 		},
+		Labels: map[string]string{
+			oam.LabelVolumeClaim: volumeClaim.Name,
+		},
 	}
 	// generate pvc
 	switch volumeClaim.Spec.Type {
@@ -144,6 +149,11 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				Resources: v1.ResourceRequirements{
 					Requests: v1.ResourceList{
 						v1.ResourceStorage: resource.MustParse(size),
+					},
+				},
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						oam.LabelVolumeClaim: volumeClaim.Name,
 					},
 				},
 			},
