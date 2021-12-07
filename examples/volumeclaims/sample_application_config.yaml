@@ -4,32 +4,32 @@ metadata:
   name: example-hostpath
 spec:
   components:
-    - componentName: oam-component-hostpath
+    - componentName: grafana
       traits:
         - trait:
             apiVersion: core.oam.dev/v1alpha2
             kind: VolumeTrait
             metadata:
-              name: oam-component-hostpath
+              name: grafana
             spec:
               volumeList:
                 - containerIndex: 0
                   isInitContainer: false
                   paths:
                     - path: /var/log/test
-                      name: html
+                      name: html-1
                       persistentVolumeClaim: hp-1
                 - containerIndex: 0
                   isInitContainer: true
                   paths:
                     - path: /var/log/a
-                      name: html
+                      name: html-2
                       persistentVolumeClaim: hp-1
 
   volumeClaims:
     - type: StorageClass
       storageClassName: hello
-      name: sc-1
+      name: sc-2
       size: 10Gi
     - type: HostPath
       hostPath: /data/opt/xxx

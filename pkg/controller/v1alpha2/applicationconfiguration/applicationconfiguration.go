@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/klog/v2"
 
 	"github.com/pkg/errors"
@@ -217,6 +219,9 @@ func (r *OAMApplicationReconciler) Reconcile(req reconcile.Request) (result reco
 	// patch the final status on the client side, k8s sever can't merge them
 	r.updateStatus(ctx, ac, acPatch, workloads)
 
+	if err := r.cleanUp(ctx, ac); err != nil {
+		return reconcile.Result{RequeueAfter: shortWait}, errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
+	}
 	ac.Status.Dependency = v1alpha2.DependencyStatus{}
 	if len(depStatus.Unsatisfied) != 0 {
 		r.syncTime = dependCheckWait
@@ -332,6 +337,35 @@ func (r *OAMApplicationReconciler) handleDeleteTimeStamp(ctx context.Context, ac
 			return errors.Wrap(r.client.Status().Update(ctx, ac), errUpdateAppConfigStatus)
 		}
 		return errors.Wrap(r.client.Update(ctx, ac), errUpdateAppConfigStatus)
+	}
+	return nil
+}
+
+func (r *OAMApplicationReconciler) cleanUp(ctx context.Context, ac *v1alpha2.ApplicationConfiguration) error {
+	labels := &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			oam.LabelAppName: ac.Name,
+		},
+	}
+	selector, _ := metav1.LabelSelectorAsSelector(labels)
+	vcs := v1alpha2.VolumeClaimList{}
+	if err := r.client.List(ctx, &vcs, &client.ListOptions{LabelSelector: selector}); err != nil {
+		return err
+	}
+
+	for _, v := range vcs.Items {
+		needDelete := true
+		for _, x := range ac.Spec.VolumeClaims {
+			if v.Name == x.Name {
+				needDelete = false
+				break
+			}
+		}
+		if needDelete {
+			if err := r.client.Delete(ctx, &v); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

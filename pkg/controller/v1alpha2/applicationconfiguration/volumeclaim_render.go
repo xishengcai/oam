@@ -3,6 +3,7 @@ package applicationconfiguration
 import (
 	"context"
 
+	"github.com/xishengcai/oam/pkg/oam"
 	"github.com/xishengcai/oam/util/apply"
 
 	"github.com/xishengcai/oam/apis/core/v1alpha2"
@@ -48,6 +49,9 @@ func (r *volumeClaims) renderVolumeClaims(ctx context.Context, ac *v1alpha2.Appl
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: ac.Namespace,
+			Labels: map[string]string{
+				oam.LabelAppName: ac.Name,
+			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: ac.APIVersion,

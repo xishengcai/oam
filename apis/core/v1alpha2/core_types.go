@@ -433,6 +433,9 @@ type ApplicationConfigurationStatus struct {
 
 	// HistoryWorkloads will record history but still working revision workloads.
 	HistoryWorkloads []HistoryWorkload `json:"historyWorkloads,omitempty"`
+
+	// Resources managed by this containerised workload.
+	Resources []runtimev1alpha1.TypedReference `json:"resources,omitempty"`
 }
 
 // DependencyStatus represents the observed state of the dependency of

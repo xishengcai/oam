@@ -44,6 +44,9 @@ type Trait struct {
 	Definition v1alpha2.TraitDefinition
 }
 
+type VolumeClaim struct {
+}
+
 // Status produces the status of this workload and its traits, suitable for use
 // in the status of an ApplicationConfiguration.
 func (w Workload) Status() v1alpha2.WorkloadStatus {
