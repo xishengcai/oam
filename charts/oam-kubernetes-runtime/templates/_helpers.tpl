@@ -47,6 +47,7 @@ Use create namespace
 Common labels
 */}}
 {{- define "oam-kubernetes-runtime.labels" -}}
+release: oam-kubernetes-runtime
 helm.sh/chart: {{ include "oam-kubernetes-runtime.chart" . }}
 {{ include "oam-kubernetes-runtime.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
@@ -61,6 +62,7 @@ Selector labels
 {{- define "oam-kubernetes-runtime.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "oam-kubernetes-runtime.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+release: oam-kubernetes-runtime
 {{- end -}}
 
 {{/*

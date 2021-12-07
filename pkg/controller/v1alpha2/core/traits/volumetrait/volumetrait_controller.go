@@ -179,12 +179,12 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 			var volumeMounts []v1.VolumeMount
 			for _, path := range item.Paths {
 				volumeMount := v1.VolumeMount{
-					Name:      path.Name,
+					Name:      path.PersistentVolumeClaim,
 					MountPath: path.Path,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
 				volumes[path.PersistentVolumeClaim] = v1.Volume{
-					Name:         path.Name,
+					Name:         path.PersistentVolumeClaim,
 					VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: path.PersistentVolumeClaim}},
 				}
 			}

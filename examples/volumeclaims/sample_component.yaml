@@ -1,13 +1,13 @@
 apiVersion: core.oam.dev/v1alpha2
 kind: Component
 metadata:
-  name: oam-component-hostpath
+  name: grafana
 spec:
   workload:
     apiVersion: core.oam.dev/v1alpha2
     kind: ContainerizedWorkload
     metadata:
-      name: oam-component-hostpath
+      name: grafana
     spec:
       containers:
         - name: grafana

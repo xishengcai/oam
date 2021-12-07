@@ -14,14 +14,12 @@ func (r *Reconcile) cleanupResources(ctx context.Context, volumeTrait *v1alpha2.
 		if findStringElem(pvcName, res.Name) {
 			continue
 		}
-
 		if err := r.clientSet.CoreV1().PersistentVolumeClaims(volumeTrait.Namespace).
 			Delete(ctx, res.Name, metav1.DeleteOptions{}); err != nil {
 			return err
 		}
 		klog.InfoS("gc volumeTrait pvc resources", res.Kind, res.UID)
 	}
-
 	return nil
 }
 
