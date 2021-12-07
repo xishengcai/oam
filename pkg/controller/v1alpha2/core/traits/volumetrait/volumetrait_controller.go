@@ -25,9 +25,7 @@ import (
 	clientappv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	oamv1alpha2 "github.com/xishengcai/oam/apis/core/v1alpha2"
@@ -62,13 +60,16 @@ func Setup(mgr ctrl.Manager, _ controller.Args) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		For(&oamv1alpha2.VolumeTrait{}).
-		Owns(&v1.PersistentVolumeClaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &oamv1alpha2.VolumeTrait{}}, &VolumeHandler{
-			ClientSet:  r.clientSet,
-			Client:     mgr.GetClient(),
-			dm:         r.dm,
-			AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
-		}).
+		Watches(
+			&source.Kind{
+				Type: &oamv1alpha2.VolumeTrait{},
+			},
+			&VolumeHandler{
+				ClientSet:  r.clientSet,
+				Client:     mgr.GetClient(),
+				dm:         r.dm,
+				AppsClient: clientappv1.NewForConfigOrDie(mgr.GetConfig()),
+			}).
 		Complete(r)
 }
 
@@ -192,8 +193,8 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 				return ctrl.Result{}, fmt.Errorf("container Index out of range")
 			}
 			container, _ := containers.([]interface{})[item.ContainerIndex].(map[string]interface{})
-			initContainer, _ := initContainers.([]interface{})[item.ContainerIndex].(map[string]interface{})
 			if item.IsInitContainer {
+				initContainer, _ := initContainers.([]interface{})[item.ContainerIndex].(map[string]interface{})
 				oldVolumeMounts := getVolumeMountsFromContainer(initContainer)
 				// 找出非pvc,hostPath 的volumeMounts
 				volumeMounts = append(volumeMounts, findConfigVolumes(oldVolumes, oldVolumeMounts)...)

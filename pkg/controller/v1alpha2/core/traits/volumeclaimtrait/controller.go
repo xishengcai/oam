@@ -60,6 +60,7 @@ func Setup(mgr ctrl.Manager, _ controller.Args) error {
 		Named(name).
 		For(&oamv1alpha2.VolumeClaim{}).
 		Owns(&v1.PersistentVolumeClaim{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(&v1.PersistentVolume{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
 			&source.Kind{
 				Type: &oamv1alpha2.VolumeClaim{},
@@ -83,15 +84,9 @@ type Reconcile struct {
 	Scheme *runtime.Scheme
 }
 
-// Reconcile to reconcile volume trait.
-// +kubebuilder:rbac:groups=core.oam.dev,resources=volumetraits,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core.oam.dev,resources=volumetraits/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core.oam.dev,resources=containerizedworkloads,verbs=get;list;
-// +kubebuilder:rbac:groups=core.oam.dev,resources=containerizedworkloads/status,verbs=get;
-// +kubebuilder:rbac:groups=core.oam.dev,resources=workloaddefinition,verbs=get;list;
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// Reconcile to reconcile volumeClaim trait.
+// +kubebuilder:rbac:groups=core.oam.dev,resources=volumeclaims,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core.oam.dev,resources=volumeclaims/status,verbs=get;update;patch
 func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), reconcileTimeout)
 	defer cancel()
@@ -112,6 +107,11 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	var pvc *v1.PersistentVolumeClaim
 	var pv *v1.PersistentVolume
+
+	size := volumeClaim.Spec.Size
+	if size == "" {
+		size = "1Gi"
+	}
 
 	objectMeta := metav1.ObjectMeta{
 		Name:      volumeClaim.Name,
@@ -143,7 +143,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				VolumeName: volumeClaim.Name,
 				Resources: v1.ResourceRequirements{
 					Requests: v1.ResourceList{
-						v1.ResourceStorage: resource.MustParse("1Gi"),
+						v1.ResourceStorage: resource.MustParse(size),
 					},
 				},
 			},
@@ -167,7 +167,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					},
 				},
 				Capacity: v1.ResourceList{
-					v1.ResourceStorage: resource.MustParse("1Gi"),
+					v1.ResourceStorage: resource.MustParse(size),
 				},
 			},
 		}
@@ -186,7 +186,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				},
 				Resources: v1.ResourceRequirements{
 					Requests: v1.ResourceList{
-						v1.ResourceStorage: resource.MustParse(volumeClaim.Spec.Size),
+						v1.ResourceStorage: resource.MustParse(size),
 					},
 				},
 			},
@@ -217,14 +217,25 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	)
 
 	// if type == hostPath, apply
-	_, err = r.clientSet.CoreV1().PersistentVolumes().Get(ctx, volumeClaim.Name, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			_, err = r.clientSet.CoreV1().PersistentVolumes().Create(ctx, pv, metav1.CreateOptions{})
-			if err != nil {
-				return ctrl.Result{RequeueAfter: waitTime}, err
+	if volumeClaim.Spec.Type == HostPath {
+		pvReturn, err := r.clientSet.CoreV1().PersistentVolumes().Get(ctx, volumeClaim.Name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				_, err = r.clientSet.CoreV1().PersistentVolumes().Create(ctx, pv, metav1.CreateOptions{})
+				if err != nil {
+					return ctrl.Result{RequeueAfter: waitTime}, err
+				}
 			}
 		}
+		r.record.Event(&volumeClaim, event.Normal("PV created", fmt.Sprintf("successfully server side create a pv `%s`", pv.Name)))
+		statusResources = append(statusResources,
+			cpv1alpha1.TypedReference{
+				APIVersion: pvReturn.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+				Kind:       pvReturn.GetObjectKind().GroupVersionKind().Kind,
+				Name:       pvReturn.GetName(),
+				UID:        pvReturn.UID,
+			},
+		)
 	}
 
 	volumeClaim.Status.Resources = statusResources
