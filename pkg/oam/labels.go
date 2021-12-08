@@ -33,6 +33,8 @@ const (
 	// TraitTypeLabel indicates the type of the traitDefinition
 	TraitTypeLabel = "trait.oam.dev/type"
 
+	LabelVolumeClaim = "app.oam.dev/volumeClaim"
+
 	// serviceMesh must set version selector
 	LabelVersion   = "version"
 	LabelVersionV1 = "v1"
