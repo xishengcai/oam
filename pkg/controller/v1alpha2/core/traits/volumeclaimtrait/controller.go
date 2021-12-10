@@ -115,6 +115,8 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		size = "1Gi"
 	}
 
+	pvName := volumeClaim.Name + "-" + volumeClaim.Namespace
+	labelName := pvName
 	objectMeta := metav1.ObjectMeta{
 		Name:      volumeClaim.Name,
 		Namespace: volumeClaim.Namespace,
@@ -129,7 +131,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			},
 		},
 		Labels: map[string]string{
-			oam.LabelVolumeClaim: volumeClaim.Name,
+			oam.LabelVolumeClaim: labelName,
 		},
 	}
 	// generate pvc
@@ -153,7 +155,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				},
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						oam.LabelVolumeClaim: volumeClaim.Name,
+						oam.LabelVolumeClaim: labelName,
 					},
 				},
 			},
@@ -181,6 +183,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				},
 			},
 		}
+		pv.Name = pvName
 	case StorageClass:
 		pvc = &v1.PersistentVolumeClaim{
 			TypeMeta: metav1.TypeMeta{
@@ -189,7 +192,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			},
 			ObjectMeta: objectMeta,
 			Spec: v1.PersistentVolumeClaimSpec{
-				// can't use &path.StorageClassName
 				StorageClassName: &volumeClaim.Spec.StorageClassName,
 				AccessModes: []v1.PersistentVolumeAccessMode{
 					v1.ReadWriteOnce,
@@ -228,7 +230,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// if type == hostPath, apply
 	if volumeClaim.Spec.Type == HostPath {
-		pvReturn, err := r.clientSet.CoreV1().PersistentVolumes().Get(ctx, volumeClaim.Name, metav1.GetOptions{})
+		pvReturn, err := r.clientSet.CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				_, err = r.clientSet.CoreV1().PersistentVolumes().Create(ctx, pv, metav1.CreateOptions{})
@@ -237,7 +239,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				}
 			}
 		}
-		r.record.Event(&volumeClaim, event.Normal("PV created", fmt.Sprintf("successfully server side create a pv `%s`", pv.Name)))
+		r.record.Event(&volumeClaim, event.Normal("PV created", fmt.Sprintf("successfully server side create a pv `%s`", pvName)))
 		statusResources = append(statusResources,
 			cpv1alpha1.TypedReference{
 				APIVersion: pvReturn.GetObjectKind().GroupVersionKind().GroupVersion().String(),
