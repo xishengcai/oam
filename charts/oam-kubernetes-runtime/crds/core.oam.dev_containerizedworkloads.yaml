@@ -330,6 +330,9 @@ spec:
                         cpu:
                           description: CPU required by this container.
                           properties:
+                            limits:
+                              description: 'Limits describes the maximum amount of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                              type: string
                             required:
                               description: Required CPU count. 1.0 represents one CPU core.
                               type: string
@@ -367,10 +370,13 @@ spec:
                         memory:
                           description: Memory required by this container.
                           properties:
+                            limits:
+                              type: string
                             required:
                               description: Required memory.
                               type: string
                           required:
+                            - limits
                           - required
                           type: object
                         volumes:
@@ -728,6 +734,9 @@ spec:
                         cpu:
                           description: CPU required by this container.
                           properties:
+                            limits:
+                              description: 'Limits describes the maximum amount of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                              type: string
                             required:
                               description: Required CPU count. 1.0 represents one CPU core.
                               type: string
@@ -765,10 +774,13 @@ spec:
                         memory:
                           description: Memory required by this container.
                           properties:
+                            limits:
+                              type: string
                             required:
                               description: Required memory.
                               type: string
                           required:
+                            - limits
                             - required
                           type: object
                         volumes:
