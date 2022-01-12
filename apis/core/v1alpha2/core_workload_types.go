@@ -58,12 +58,17 @@ type SecretKeySelector struct {
 type CPUResources struct {
 	// Required CPU count. 1.0 represents one CPU core.
 	Required resource.Quantity `json:"required"`
+	// Limits describes the maximum amount of compute resources allowed.
+	// More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/
+	// +optional
+	Limits resource.Quantity `json:"limits"`
 }
 
 // MemoryResources required by a container.
 type MemoryResources struct {
 	// Required memory.
 	Required resource.Quantity `json:"required"`
+	Limits   resource.Quantity `json:"limits"`
 }
 
 // GPUResources required by a container.
