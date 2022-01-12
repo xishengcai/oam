@@ -186,8 +186,8 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 					corev1.ResourceMemory: container.Resources.Memory.Required,
 				},
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    container.Resources.CPU.Required,
-					corev1.ResourceMemory: container.Resources.Memory.Required,
+					corev1.ResourceCPU:    container.Resources.CPU.Limits,
+					corev1.ResourceMemory: container.Resources.Memory.Limits,
 				},
 			}
 			for _, v := range container.Resources.Volumes {
