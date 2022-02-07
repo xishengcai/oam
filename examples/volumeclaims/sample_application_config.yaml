@@ -24,7 +24,7 @@ spec:
                   paths:
                     - path: /var/log/a
                       name: html-2
-                      persistentVolumeClaim: hp-1
+                      persistentVolumeClaim: sc-2
 
   volumeClaims:
     - type: StorageClass

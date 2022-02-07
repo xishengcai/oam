@@ -36,7 +36,6 @@ import (
 const (
 	waitTime         = time.Second * 60
 	reconcileTimeout = time.Second * 60
-	HostPath         = "HostPath"
 	StorageClass     = "StorageClass"
 )
 
@@ -108,7 +107,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	var pvc *v1.PersistentVolumeClaim
-	var pv *v1.PersistentVolume
 
 	size := volumeClaim.Spec.Size
 	if size == "" {
@@ -136,54 +134,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	// generate pvc
 	switch volumeClaim.Spec.Type {
-	case HostPath:
-		pvc = &v1.PersistentVolumeClaim{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       util.KindPersistentVolumeClaim,
-			},
-			ObjectMeta: objectMeta,
-			Spec: v1.PersistentVolumeClaimSpec{
-				AccessModes: []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteOnce,
-				},
-				VolumeName: labelName,
-				Resources: v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceStorage: resource.MustParse(size),
-					},
-				},
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						oam.LabelVolumeClaim: labelName,
-					},
-				},
-			},
-		}
-
-		hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
-		pv = &v1.PersistentVolume{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       util.KindPersistentVolume,
-			},
-			ObjectMeta: objectMeta,
-			Spec: v1.PersistentVolumeSpec{
-				AccessModes: []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteOnce,
-				},
-				PersistentVolumeSource: v1.PersistentVolumeSource{
-					HostPath: &v1.HostPathVolumeSource{
-						Path: volumeClaim.Spec.HostPath,
-						Type: &hostPathDirectoryOrCreate,
-					},
-				},
-				Capacity: v1.ResourceList{
-					v1.ResourceStorage: resource.MustParse(size),
-				},
-			},
-		}
-		pv.Name = pvName
 	case StorageClass:
 		pvc = &v1.PersistentVolumeClaim{
 			TypeMeta: metav1.TypeMeta{
@@ -227,28 +177,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			UID:        pvcReturn.UID,
 		},
 	)
-
-	// if type == hostPath, apply
-	if volumeClaim.Spec.Type == HostPath {
-		pvReturn, err := r.clientSet.CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				_, err = r.clientSet.CoreV1().PersistentVolumes().Create(ctx, pv, metav1.CreateOptions{})
-				if err != nil {
-					return ctrl.Result{RequeueAfter: waitTime}, err
-				}
-			}
-		}
-		r.record.Event(&volumeClaim, event.Normal("PV created", fmt.Sprintf("successfully server side create a pv `%s`", pvName)))
-		statusResources = append(statusResources,
-			cpv1alpha1.TypedReference{
-				APIVersion: pvReturn.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-				Kind:       pvReturn.GetObjectKind().GroupVersionKind().Kind,
-				Name:       pvReturn.GetName(),
-				UID:        pvReturn.UID,
-			},
-		)
-	}
 
 	volumeClaim.Status.Resources = statusResources
 	volumeClaimTraitPatch := client.MergeFrom(volumeClaim.DeepCopyObject())
