@@ -63,7 +63,6 @@ func (r *volumeClaims) renderVolumeClaims(ctx context.Context, ac *v1alpha2.Appl
 		},
 		Spec: v1alpha2.VolumeClaimSpec{
 			Type:             vcc.Type,
-			HostPath:         vcc.HostPath,
 			StorageClassName: vcc.StorageClassName,
 			Size:             vcc.Size,
 		},

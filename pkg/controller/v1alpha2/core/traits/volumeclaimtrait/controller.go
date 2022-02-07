@@ -134,56 +134,9 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			oam.LabelVolumeClaim: labelName,
 		},
 	}
+
 	// generate pvc
 	switch volumeClaim.Spec.Type {
-	case HostPath:
-		pvc = &v1.PersistentVolumeClaim{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       util.KindPersistentVolumeClaim,
-			},
-			ObjectMeta: objectMeta,
-			Spec: v1.PersistentVolumeClaimSpec{
-				AccessModes: []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteOnce,
-				},
-				VolumeName: labelName,
-				Resources: v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceStorage: resource.MustParse(size),
-					},
-				},
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						oam.LabelVolumeClaim: labelName,
-					},
-				},
-			},
-		}
-
-		hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
-		pv = &v1.PersistentVolume{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       util.KindPersistentVolume,
-			},
-			ObjectMeta: objectMeta,
-			Spec: v1.PersistentVolumeSpec{
-				AccessModes: []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteOnce,
-				},
-				PersistentVolumeSource: v1.PersistentVolumeSource{
-					HostPath: &v1.HostPathVolumeSource{
-						Path: volumeClaim.Spec.HostPath,
-						Type: &hostPathDirectoryOrCreate,
-					},
-				},
-				Capacity: v1.ResourceList{
-					v1.ResourceStorage: resource.MustParse(size),
-				},
-			},
-		}
-		pv.Name = pvName
 	case StorageClass:
 		pvc = &v1.PersistentVolumeClaim{
 			TypeMeta: metav1.TypeMeta{
