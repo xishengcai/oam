@@ -37,6 +37,8 @@ const (
 	errMountVolume = "cannot mount volume"
 	errApplyPVC    = "cannot apply the pvc"
 	waitTime       = time.Second * 60
+	HostPath       = "HostPath"
+	StorageClass   = "StorageClass"
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
@@ -184,10 +186,29 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 					MountPath: path.Path,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
-				volumes[path.PersistentVolumeClaim] = v1.Volume{
-					Name:         path.PersistentVolumeClaim,
-					VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: path.PersistentVolumeClaim}},
+				var volumeClaim oamv1alpha2.VolumeClaim
+				if err := r.Get(ctx, client.ObjectKey{Name: path.PersistentVolumeClaim, Namespace: appConfig.GetNamespace()}, &volumeClaim); err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
 				}
+
+				switch volumeClaim.Spec.Type {
+				case HostPath:
+					volumes[path.PersistentVolumeClaim] = v1.Volume{
+						Name: path.PersistentVolumeClaim,
+						VolumeSource: v1.VolumeSource{
+							HostPath: &v1.HostPathVolumeSource{
+								Path: volumeClaim.Spec.HostPath,
+							},
+						},
+					}
+
+				case StorageClass:
+					volumes[path.PersistentVolumeClaim] = v1.Volume{
+						Name:         path.PersistentVolumeClaim,
+						VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: path.PersistentVolumeClaim}},
+					}
+				}
+
 			}
 			if item.ContainerIndex > len(containers.([]interface{}))-1 {
 				return ctrl.Result{}, fmt.Errorf("container Index out of range")
