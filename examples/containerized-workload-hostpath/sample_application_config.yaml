@@ -16,11 +16,8 @@ spec:
                 - containerIndex: 0
                   paths:
                     - path: /var/log/test
-                      hostPath: /data/test
-                      type: HostPath
+                      hostPath:
+                        path: /data/x
+                        type: DirectoryOrCreate
                       name: path-1
-                    - size: 20Gi
-                      path: /var/log/test3
-                      storageClassName: local-path
-                      name: path-2
 

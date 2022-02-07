@@ -49,6 +49,9 @@ var (
 	// KindPersistentVolumeClaim is the k8s PersistentVolumeClaim kind
 	KindPersistentVolumeClaim = reflect.TypeOf(corev1.PersistentVolumeClaim{}).Name()
 
+	// KindPersistentVolume is the k8s PersistentVolume kind
+	KindPersistentVolume = reflect.TypeOf(corev1.PersistentVolume{}).Name()
+
 	// ReconcileWaitResult is the time to wait between reconciliation.
 	ReconcileWaitResult = reconcile.Result{RequeueAfter: 30 * time.Second}
 

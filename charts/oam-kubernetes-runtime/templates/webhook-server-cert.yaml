@@ -1,0 +1,13 @@
+{{- $ca := buildCustomCert .Values.certificate.caBundle .Values.certificate.caKey }}
+  {{- $cert := genSignedCert "oam-kubernetes-runtime-webhook.lstack-system.svc" nil (list "oam-kubernetes-runtime-webhook" "oam-kubernetes-runtime-webhook.lstack-system" "oam-kubernetes-runtime-webhook.lstack-system.svc" "oam-kubernetes-runtime-webhook.lstack-system.svc.cluster.local" ) 3650 $ca }}
+
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-server-cert
+  namespace: {{ .Release.Namespace }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ $cert.Cert | b64enc | quote }}
+  tls.key: {{ $cert.Key | b64enc | quote }}

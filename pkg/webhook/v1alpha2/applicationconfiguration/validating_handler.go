@@ -126,6 +126,22 @@ func ValidateTraitObjectFn(_ context.Context, v ValidatingAppConfig) []error {
 	return nil
 }
 
+// ValidateVolumeClaimFn validates the ApplicationConfiguration on creation/update
+func ValidateVolumeClaimFn(_ context.Context, v ValidatingAppConfig) []error {
+	klog.Info("validate applicationConfiguration VolumeClaim", "name", v.appConfig.Name)
+	vcMap := make(map[string]int)
+	var allErrs field.ErrorList
+	// TODO： 需要了解k8s是怎么检测重复容器名称的原理
+	for index, vc := range v.appConfig.Spec.VolumeClaims {
+		fldPath := field.NewPath("spec").Child("volumeClaims").Index(index).Child("name")
+		vcMap[vc.Name]++
+		if vcMap[vc.Name] == 2 {
+			allErrs = append(allErrs, field.Duplicate(fldPath, vc.Name))
+		}
+	}
+	return nil
+}
+
 // ValidateRevisionNameFn validates revisionName and componentName are assigned both.
 func ValidateRevisionNameFn(_ context.Context, v ValidatingAppConfig) []error {
 	klog.Info("validate revisionName in applicationConfiguration", "name", v.appConfig.Name)
@@ -239,6 +255,7 @@ func RegisterValidatingHandler(mgr manager.Manager) error {
 			AppConfigValidateFunc(ValidateRevisionNameFn),
 			AppConfigValidateFunc(ValidateWorkloadNameForVersioningFn),
 			AppConfigValidateFunc(ValidateTraitAppliableToWorkloadFn),
+			AppConfigValidateFunc(ValidateVolumeClaimFn),
 			// TODO(wonderflow): Add more validation logic here.
 		},
 	}})

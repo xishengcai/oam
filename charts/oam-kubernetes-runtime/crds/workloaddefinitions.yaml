@@ -20,3 +20,11 @@ metadata:
 spec:
   definitionRef:
     name: helmreleases.helm.fluxcd.io
+---
+apiVersion: core.oam.dev/v1alpha2
+kind: WorkloadDefinition
+metadata:
+  name: jobs.batch
+spec:
+  definitionRef:
+    name: jobs.batch

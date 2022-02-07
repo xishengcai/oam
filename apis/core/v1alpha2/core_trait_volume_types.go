@@ -18,6 +18,7 @@ package v1alpha2
 
 import (
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/xishengcai/oam/pkg/oam"
@@ -34,21 +35,22 @@ type VolumeTraitSpec struct {
 
 // VolumeMountItem contains path of container
 type VolumeMountItem struct {
-	ContainerIndex int        `json:"containerIndex"`
-	Paths          []PathItem `json:"paths"`
+	ContainerIndex  int        `json:"containerIndex"`
+	IsInitContainer bool       `json:"isInitContainer,omitempty"`
+	Paths           []PathItem `json:"paths"`
 }
 
 // PathItem define storageClass, size, path, name
 type PathItem struct {
-	// type 原则上应该是【枚举，必填】，但是为了向前兼容，不做强制
-	Type             string `json:"type,omitempty"`
-	StorageClassName string `json:"storageClassName,omitempty"`
-	HostPath         string `json:"hostPath,omitempty"`
-	Size             string `json:"size,omitempty"`
-
-	// 容器内路径
-	Path string `json:"path"`
+	// set volumeMount and volumes link name
 	Name string `json:"name"`
+
+	// Path is the name of directory in container
+	Path string `json:"path"`
+
+	// It's either PVC or HostPath
+	PersistentVolumeClaim string                   `json:"persistentVolumeClaim,omitempty"`
+	HostPath              *v1.HostPathVolumeSource `json:"hostPath,omitempty"`
 }
 
 // A VolumeTraitStatus represents the observed state of a

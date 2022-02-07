@@ -125,6 +125,14 @@ var (
 	CanaryTraitGroupVersionKind = SchemeGroupVersion.WithKind(CanaryTraitKind)
 )
 
+// VolumeClaim type metadata.
+var (
+	VolumeClaimKind             = reflect.TypeOf(VolumeClaim{}).Name()
+	VolumeClaimGroupKind        = schema.GroupKind{Group: Group, Kind: VolumeClaimKind}.String()
+	VolumeClaimKindAPIVersion   = VolumeClaimKind + "." + SchemeGroupVersion.String()
+	VolumeClaimGroupVersionKind = SchemeGroupVersion.WithKind(VolumeClaimKind)
+)
+
 func init() {
 	SchemeBuilder.Register(&WorkloadDefinition{}, &WorkloadDefinitionList{})
 	SchemeBuilder.Register(&TraitDefinition{}, &TraitDefinitionList{})
@@ -137,4 +145,5 @@ func init() {
 	SchemeBuilder.Register(&VolumeTrait{}, &VolumeTraitList{})
 	SchemeBuilder.Register(&HorizontalPodAutoscalerTrait{}, &HorizontalPodAutoscalerTraitList{})
 	SchemeBuilder.Register(&CanaryTrait{}, &CanaryTraitList{})
+	SchemeBuilder.Register(&VolumeClaim{}, &VolumeClaimList{})
 }

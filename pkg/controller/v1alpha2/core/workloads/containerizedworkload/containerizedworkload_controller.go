@@ -313,6 +313,13 @@ func (r *Reconciler) checkWorkloadDependency(wl *v1alpha2.ContainerizedWorkload)
 			if err != nil {
 				return err
 			}
+		case "Third":
+			klog.Infof("ContainerizedWorkload dependency third component, can't check health, we default pass")
+			return nil
+
+		default:
+			klog.Infof("ignore Error.ContainerizedWorkload: % find not support dependency kind: %s", wl.Name, dep.Name)
+			return nil
 		}
 	}
 
@@ -363,6 +370,7 @@ func (r *Reconciler) queryHelmReleaseWorkloadHealth(wl *v1alpha2.ContainerizedWo
 	}
 
 	for _, deploy := range deployList.Items {
+		notFoundFlag = false
 		if deploy.Status.ReadyReplicas != deploy.Status.Replicas {
 			return fmt.Errorf("deployment %s is not ready, ReadyReplicas: %d, Replicas: %d",
 				deploy.Name, deploy.Status.ReadyReplicas, deploy.Status.Replicas)
@@ -376,6 +384,7 @@ func (r *Reconciler) queryHelmReleaseWorkloadHealth(wl *v1alpha2.ContainerizedWo
 		return err
 	}
 	for _, sts := range statefulSetList.Items {
+		notFoundFlag = false
 		if sts.Status.ReadyReplicas != sts.Status.Replicas {
 			return fmt.Errorf("statufulSet %s is not ready, ReadyReplicas: %d, Replicas: %d",
 				sts.Name, sts.Status.ReadyReplicas, sts.Status.Replicas)

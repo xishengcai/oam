@@ -1,0 +1,42 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  labels:
+    application: app-3002801356
+  name: test
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    metadata:
+      name: test
+    spec:
+      containers:
+        - image: nginx:latest
+          name: container-0
+          ports:
+            - containerPort: 80
+              hostPort: 90
+              name: port-0
+          resources:
+            cpu:
+              limits: 220m
+              required: 220m
+            memory:
+              limits: 220Mi
+              required: 20Mi
+      initContainers:
+        - command:
+            - echo
+            - nihao
+          image: alpine:latest
+          name: init-0
+          resources:
+            cpu:
+              limits: 220m
+              required: 220m
+            memory:
+              limits: 220Mi
+              required: 220Mi
+      nodeSelector: { }
+      serviceMesh: false

@@ -17,4 +17,4 @@ spec:
               name: wordpress
           config:
             - path: /opt/xxx.log
-              value: dddddaaaaaa
+              value: dddddaaaaaadddd

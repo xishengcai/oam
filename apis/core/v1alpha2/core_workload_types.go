@@ -58,12 +58,14 @@ type SecretKeySelector struct {
 type CPUResources struct {
 	// Required CPU count. 1.0 represents one CPU core.
 	Required resource.Quantity `json:"required"`
+	Limits   resource.Quantity `json:"limits,omitempty"`
 }
 
 // MemoryResources required by a container.
 type MemoryResources struct {
 	// Required memory.
 	Required resource.Quantity `json:"required"`
+	Limits   resource.Quantity `json:"limits,omitempty"`
 }
 
 // GPUResources required by a container.
@@ -376,6 +378,9 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	PointToGrayName *string `json:"pointToGrayName,omitempty"`
 
+	// InitContainers of which this workload initContainers.
+	InitContainers []Container `json:"initContainers,omitempty"`
+
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
 
@@ -390,6 +395,7 @@ type ContainerizedWorkloadSpec struct {
 
 type Dependency struct {
 	// Kind of the referenced object.
+	// +kubebuilder:validation:Enum=HelmRelease;ContainerizedWorkload;Third
 	Kind string `json:"kind"`
 
 	// Name of the referenced object.
