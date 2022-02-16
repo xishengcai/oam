@@ -15,7 +15,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -115,7 +114,6 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 
 	traits := make([]*Trait, 0, len(acc.Traits))
 	traitDefs := make([]v1alpha2.TraitDefinition, 0, len(acc.Traits))
-	volumeTraitExit := false
 	compInfoLabels[oam.LabelOAMResourceType] = oam.ResourceTypeTrait
 
 	for _, ct := range acc.Traits {
@@ -129,14 +127,6 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 		util.PassLabelAndAnnotation(ac, t)
 		traits = append(traits, &Trait{Object: *t, Definition: *traitDef})
 		traitDefs = append(traitDefs, *traitDef)
-		if t.GetKind() == util.KindVolumeTrait {
-			// 如果volumeTrait 中的数组不为0， 则是statefulset 类型
-			volumeTrait := &v1alpha2.VolumeTrait{}
-			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(t.Object, volumeTrait)
-			if len(volumeTrait.Spec.VolumeList) != 0 {
-				volumeTraitExit = true
-			}
-		}
 	}
 
 	util.AddLabels(w, map[string]string{util.LabelAppID: ac.Name})
@@ -147,11 +137,10 @@ func (r *components) renderComponent(ctx context.Context, acc v1alpha2.Applicati
 	}
 
 	if existingWorkload != nil && existingWorkload.Object == nil {
-		if volumeTraitExit {
-			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
-		} else {
-			util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindDeployment})
-		}
+		//if acc.WorkloadType == "StatefulSet" {
+		//	util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindStatefulSet})
+		//}
+		util.AddLabels(w, map[string]string{util.LabelKeyChildResource: util.KindDeployment})
 	} else if existingWorkload != nil {
 		util.AddLabels(w, existingWorkload.GetLabels())
 	}
