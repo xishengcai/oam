@@ -37,7 +37,8 @@ if [ -z "$VERSION" ]; then
 fi
 
 if [ -z "$IMAGE_REPO" ]; then
-  IMAGE_REPO='registry.cn-beijing.aliyuncs.com/launcher-agent-only-test'
+  IMAGE_REPO='registry.cn-beijing.aliyuncs.com/launcher-agent-only'
+#  IMAGE_REPO='registry.cn-hangzhou.aliyuncs.com/launcher-agent-only'
 fi
 
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build   -o  ./bin/${BIN_FILE} ./main.go
