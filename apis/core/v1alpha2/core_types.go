@@ -315,6 +315,9 @@ type ApplicationConfigurationComponent struct {
 	// +optional
 	ComponentName string `json:"componentName,omitempty"`
 
+	// WorkloadType default type is deployment
+	//WorkloadType string `json:"WorkloadType,omitempty"`
+
 	// RevisionName of a specific component revision to which to bind
 	// ApplicationConfiguration. This is mutually exclusive with componentName.
 	// +optional
