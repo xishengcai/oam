@@ -22,8 +22,10 @@ spec:
           resources:
             cpu:
               required: "60m"
+              limits: "100m"
             memory:
               required: "60Mi"
+              limits: "100Mi"
   parameters:
     - name: instance-name
       required: true

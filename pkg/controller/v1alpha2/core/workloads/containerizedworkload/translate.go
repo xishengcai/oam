@@ -215,6 +215,9 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 
 			if p.HostPort > 0 && p.HostPort < 65536 {
 				port.HostPort = p.HostPort
+				d.Spec.Strategy = appsv1.DeploymentStrategy{
+					Type: appsv1.RecreateDeploymentStrategyType,
+				}
 			}
 			kubernetesContainer.Ports = append(kubernetesContainer.Ports, port)
 		}
