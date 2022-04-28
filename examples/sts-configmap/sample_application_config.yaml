@@ -4,22 +4,4 @@ metadata:
   name: oam-sts-config
 spec:
   components:
-    - componentName: oam-sts-config
-      traits:
-        - trait:
-            apiVersion: core.oam.dev/v1alpha2
-            kind: VolumeTrait
-            metadata:
-              name: oam-volume-trait
-            spec:
-              volumeList:
-                - containerIndex: 0
-                  paths:
-                    - path: /var/log/test
-                      name: hp-1
-                      persistentVolumeClaim: hp-1
-  volumeClaims:
-    - type: HostPath
-      hostPath: /data/opt/xxx
-      name: hp-1
-
+    - componentName: sts-example

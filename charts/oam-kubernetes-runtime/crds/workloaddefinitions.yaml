@@ -28,3 +28,11 @@ metadata:
 spec:
   definitionRef:
     name: jobs.batch
+---
+apiVersion: core.oam.dev/v1alpha2
+kind: WorkloadDefinition
+metadata:
+  name: statefulsets.apps
+spec:
+  definitionRef:
+    name: statefulsets.apps

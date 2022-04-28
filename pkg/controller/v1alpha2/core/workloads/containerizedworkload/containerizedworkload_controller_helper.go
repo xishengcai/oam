@@ -25,7 +25,7 @@ func (r *Reconciler) renderChildResource(workload *v1alpha2.ContainerizedWorkloa
 		return nil, err
 	}
 
-	if workload.Labels[util.LabelKeyChildResource] == util.KindStatefulSet {
+	if workload.Spec.Type == v1alpha2.StatefulSetWorkloadType {
 		resource = transDepToSts(resource.(*appsv1.Deployment))
 	}
 	if err := ctrl.SetControllerReference(workload, resource, r.Scheme); err != nil {

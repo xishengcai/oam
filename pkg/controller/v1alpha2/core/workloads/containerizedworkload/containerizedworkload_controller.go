@@ -135,12 +135,12 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyChildResource)))
 	}
 	var uid types.UID
-	childWorkloadKindString := workload.Labels[util.LabelKeyChildResource]
+	childWorkloadKindString := workload.Spec.Type
 	switch childWorkloadKindString {
-	case util.KindDeployment:
-		uid = childObject.(*appsv1.Deployment).UID
-	case util.KindStatefulSet:
+	case v1alpha2.StatefulSetWorkloadType:
 		uid = childObject.(*appsv1.StatefulSet).UID
+	default:
+		uid = childObject.(*appsv1.Deployment).UID
 	}
 	workload.Status.Resources = append(workload.Status.Resources,
 		cpv1alpha1.TypedReference{
@@ -154,7 +154,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		fmt.Sprintf("Workload `%s` successfully server side patched a childResource", workload.Name)))
 
 	// garbage collect the deployment that we created but not needed
-	if err = r.cleanupResources(ctx, &workload, childWorkloadKindString, uid); err != nil {
+	if err = r.cleanupResources(ctx, &workload, string(childWorkloadKindString), uid); err != nil {
 		klog.ErrorS(err, "Failed to clean up resources")
 		r.record.Event(eventObj, event.Warning(errApplyChildResource, err))
 	}
@@ -240,17 +240,8 @@ func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.Co
 		Namespace: workload.Namespace,
 		Name:      workload.Name,
 	}
-	switch workload.Labels[util.LabelKeyChildResource] {
-	case util.KindDeployment:
-		dep := childObject.(*appsv1.Deployment)
-		emptyChild := &appsv1.Deployment{}
-		err := r.Get(ctx, objectKey, emptyChild)
-		if err != nil {
-			return err
-		}
-		renderLabels = dep.Spec.Selector.MatchLabels
-		currentLabels = emptyChild.Spec.Selector.MatchLabels
-	case util.KindStatefulSet:
+	switch workload.Spec.Type {
+	case v1alpha2.StatefulSetWorkloadType:
 		sts := childObject.(*appsv1.StatefulSet)
 		emptyChild := &appsv1.StatefulSet{}
 		err := r.Get(ctx, objectKey, emptyChild)
@@ -258,6 +249,15 @@ func (r *Reconciler) checkLabelSelect(ctx context.Context, workload *v1alpha2.Co
 			return err
 		}
 		renderLabels = sts.Spec.Selector.MatchLabels
+		currentLabels = emptyChild.Spec.Selector.MatchLabels
+	default:
+		dep := childObject.(*appsv1.Deployment)
+		emptyChild := &appsv1.Deployment{}
+		err := r.Get(ctx, objectKey, emptyChild)
+		if err != nil {
+			return err
+		}
+		renderLabels = dep.Spec.Selector.MatchLabels
 		currentLabels = emptyChild.Spec.Selector.MatchLabels
 	}
 

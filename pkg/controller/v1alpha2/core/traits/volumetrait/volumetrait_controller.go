@@ -162,6 +162,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		Controller:         newTrue(false),
 		BlockOwnerDeletion: newTrue(true),
 	}
+
 	for _, res := range resources {
 		if res.GetKind() != util.KindStatefulSet && res.GetKind() != util.KindDeployment {
 			continue
@@ -201,7 +202,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 							},
 						},
 					}
-
 				case StorageClass:
 					volumes[path.PersistentVolumeClaim] = v1.Volume{
 						Name:         path.PersistentVolumeClaim,

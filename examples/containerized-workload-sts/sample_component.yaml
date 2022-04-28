@@ -9,6 +9,8 @@ spec:
     metadata:
       name: oam-component-sts
     spec:
+      type: statefulset
+      forceUpdateTimestamp: xxxx1
       containers:
         - name: nginx1
           image: nginx

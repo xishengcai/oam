@@ -445,6 +445,9 @@ spec:
                     - name
                   type: object
                 type: array
+              forceUpdateTimestamp:
+                description: ForceUpdateTimestamp
+                type: string
               initContainers:
                 description: InitContainers of which this workload initContainers.
                 items:
@@ -845,6 +848,9 @@ spec:
               serviceMesh:
                 description: check add istio label
                 type: boolean
+              type:
+                description: Type support deployment and statefulSet
+                type: string
             required:
               - containers
             type: object

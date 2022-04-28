@@ -356,6 +356,18 @@ type Container struct {
 	ImagePullSecret *string `json:"imagePullSecret,omitempty"`
 }
 
+type WorkloadType string
+
+const (
+	StatefulSetWorkloadType = "statefulset"
+	DeploymentWorkloadType  = "deployment"
+	ServiceWorkloadType     = "service"
+)
+
+const (
+	ForceUpdateTimestamp string = "forceUpdateTimestamp"
+)
+
 // A ContainerizedWorkloadSpec defines the desired state of a
 // ContainerizedWorkload.
 type ContainerizedWorkloadSpec struct {
@@ -391,6 +403,12 @@ type ContainerizedWorkloadSpec struct {
 	// Dependency components
 	// +optional
 	Dependency []Dependency `json:"dependency,omitempty"`
+
+	// Type support deployment and statefulSet
+	Type WorkloadType `json:"type,omitempty"`
+
+	// ForceUpdateTimestamp
+	ForceUpdateTimestamp string `json:"forceUpdateTimestamp,omitempty"`
 }
 
 type Dependency struct {

@@ -497,6 +497,9 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
+					Annotations: map[string]string{
+						v1alpha2.ForceUpdateTimestamp: cw.Spec.ForceUpdateTimestamp,
+					},
 				},
 			},
 		},
