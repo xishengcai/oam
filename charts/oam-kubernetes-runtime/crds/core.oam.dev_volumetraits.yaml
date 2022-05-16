@@ -53,13 +53,10 @@ spec:
                             type: string
                           persistentVolumeClaim:
                             type: string
-                          storageClass:
-                            type: string
                         required:
                           - name
                         - path
                         - persistentVolumeClaim
-                          - storageClass
                         type: object
                       type: array
                   required:

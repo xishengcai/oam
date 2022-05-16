@@ -44,7 +44,6 @@ type PathItem struct {
 	Name                  string `json:"name"`
 	PersistentVolumeClaim string `json:"persistentVolumeClaim"`
 	Path                  string `json:"path"`
-	StorageClass          string `json:"storageClass"`
 }
 
 // A VolumeTraitStatus represents the observed state of a
