@@ -408,6 +408,7 @@ type ContainerizedWorkloadSpec struct {
 	Type WorkloadType `json:"type,omitempty"`
 
 	// ForceUpdateTimestamp
+	// +optional
 	ForceUpdateTimestamp string `json:"forceUpdateTimestamp,omitempty"`
 }
 
