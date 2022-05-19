@@ -399,6 +399,10 @@ type ContainerizedWorkloadSpec struct {
 	// Dependency components
 	// +optional
 	Dependency []Dependency `json:"dependency,omitempty"`
+
+	// ForceUpdateTimestamp
+	// +optional
+	ForceUpdateTimestamp string `json:"forceUpdateTimestamp,omitempty"`
 }
 
 type Dependency struct {
