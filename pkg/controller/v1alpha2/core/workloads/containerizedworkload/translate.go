@@ -477,7 +477,7 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)
 	}
 
-	return &appsv1.Deployment{
+	dep := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       deploymentKind,
 			APIVersion: deploymentAPIVersion,
@@ -497,13 +497,17 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
-					Annotations: map[string]string{
-						v1alpha2.ForceUpdateTimestamp: cw.Spec.ForceUpdateTimestamp,
-					},
 				},
 			},
 		},
 	}
+
+	if cw.Spec.ForceUpdateTimestamp != "" {
+		dep.Spec.Template.Annotations = map[string]string{
+			v1alpha2.ForceUpdateTimestamp: cw.Spec.ForceUpdateTimestamp,
+		}
+	}
+	return &dep
 }
 
 // 如果是灰度组件，需要修改app component id

@@ -353,16 +353,16 @@ func (r *OAMApplicationReconciler) cleanUp(ctx context.Context, ac *v1alpha2.App
 		return err
 	}
 
-	for _, v := range vcs.Items {
+	for i := range vcs.Items {
 		needDelete := true
 		for _, x := range ac.Spec.VolumeClaims {
-			if v.Name == x.Name {
+			if vcs.Items[i].Name == x.Name {
 				needDelete = false
 				break
 			}
 		}
 		if needDelete {
-			if err := r.client.Delete(ctx, &v); err != nil {
+			if err := r.client.Delete(ctx, &vcs.Items[i]); err != nil {
 				return err
 			}
 		}

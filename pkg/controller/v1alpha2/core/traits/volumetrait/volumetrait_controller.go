@@ -35,7 +35,6 @@ import (
 // Reconcile error strings.
 const (
 	errMountVolume = "cannot mount volume"
-	errApplyPVC    = "cannot apply the pvc"
 	waitTime       = time.Second * 60
 	HostPath       = "HostPath"
 	StorageClass   = "StorageClass"
@@ -171,7 +170,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		cpmeta.AddOwnerReference(res, ownerRef)
 		spec, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec")
 		oldVolumes := getVolumesFromSpec(spec)
-		volumes := make(map[string]v1.Volume, 0) // 重新构建 volumes
+		volumes := make(map[string]v1.Volume) // 重新构建 volumes
 
 		// volume 是列表， 因为可能有多个容器
 		// 从 sts or deploy中找出容器
@@ -208,7 +207,6 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 						VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: path.PersistentVolumeClaim}},
 					}
 				}
-
 			}
 			if item.ContainerIndex > len(containers.([]interface{}))-1 {
 				return ctrl.Result{}, fmt.Errorf("container Index out of range")

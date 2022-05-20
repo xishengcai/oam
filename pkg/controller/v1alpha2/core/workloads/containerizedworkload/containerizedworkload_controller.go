@@ -96,7 +96,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		klog.ErrorS(err, "LocateParentAppConfig failed", "workloadName", workload.Name)
 		eventObj = &workload
 	}
-
+	klog.Infof("xxx")
 	err = r.checkWorkloadDependency(&workload)
 	if err != nil {
 		klog.ErrorS(err, "Failed to checkWorkloadDependency", "name", workload.Name)
@@ -226,6 +226,8 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		)
 	}
 
+	klog.Info(workload.Name)
+
 	if err := r.Status().Update(ctx, &workload); err != nil {
 		return util.ReconcileWaitResult, err
 	}
@@ -318,7 +320,7 @@ func (r *Reconciler) checkWorkloadDependency(wl *v1alpha2.ContainerizedWorkload)
 			return nil
 
 		default:
-			klog.Infof("ignore Error.ContainerizedWorkload: % find not support dependency kind: %s", wl.Name, dep.Name)
+			klog.Infof("ignore Error.ContainerizedWorkload: %s find not support dependency kind: %s", wl.Name, dep.Name)
 			return nil
 		}
 	}

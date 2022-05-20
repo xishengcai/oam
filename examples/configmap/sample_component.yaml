@@ -7,6 +7,7 @@ spec:
     apiVersion: core.oam.dev/v1alpha2
     kind: ContainerizedWorkload
     spec:
+      forceUpdateTimestamp: v1
       nodeSelector:
         kubernetes.io/arch: amd64
       containers:
@@ -14,7 +15,7 @@ spec:
           image: nginx
           config:
           - path: /opt/xxx.log
-            value: dddddaaaaaa
+            value: xxaxxx
             subPath: true
           - path: /opt/abc.log
             value: xxxxj

@@ -98,14 +98,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// find the resource object to record the event to, default is the parent appConfig.
-	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &volumeClaim)
-	if eventObj == nil {
-		// fallback to workload itself
-		klog.ErrorS(err, "Failed to find the parent resource", "volumeClaim", volumeClaim.Name)
-		eventObj = &volumeClaim
-	}
-
 	var pvc *v1.PersistentVolumeClaim
 
 	size := volumeClaim.Spec.Size
