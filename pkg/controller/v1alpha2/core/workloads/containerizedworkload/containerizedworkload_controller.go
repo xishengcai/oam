@@ -79,7 +79,6 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	klog.Info("Reconcile container workload")
 
 	var workload v1alpha2.ContainerizedWorkload
 	if err := r.Get(ctx, req.NamespacedName, &workload); err != nil {
@@ -89,6 +88,7 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	klog.Infof("Reconcile container namespace: %s, workload:%s", workload.Namespace, workload.Name)
 	// log.Info("Get the workload", "apiVersion", workload.APIVersion, "kind", workload.Kind)
 	// find the resource object to record the event to, default is the parent appConfig.
 	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &workload)
@@ -96,7 +96,6 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		klog.ErrorS(err, "LocateParentAppConfig failed", "workloadName", workload.Name)
 		eventObj = &workload
 	}
-	klog.Infof("xxx")
 	err = r.checkWorkloadDependency(&workload)
 	if err != nil {
 		klog.ErrorS(err, "Failed to checkWorkloadDependency", "name", workload.Name)
@@ -225,9 +224,6 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			},
 		)
 	}
-
-	klog.Info(workload.Name)
-
 	if err := r.Status().Update(ctx, &workload); err != nil {
 		return util.ReconcileWaitResult, err
 	}
