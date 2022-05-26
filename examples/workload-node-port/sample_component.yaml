@@ -1,14 +1,13 @@
 apiVersion: core.oam.dev/v1alpha2
 kind: Component
 metadata:
-  name: component-dep
-  namespace: default
+  name: example-component
 spec:
   workload:
     apiVersion: core.oam.dev/v1alpha2
     kind: ContainerizedWorkload
     spec:
-      forceUpdateTimestamp: xxxx3
+      serviceType: LoadBalancer
       containers:
         - name: wordpress
           image: wordpress:4.6.1-apache
@@ -16,20 +15,20 @@ spec:
             - containerPort: 80
               name: wordpress
             - containerPort: 81
-              name: test
+              name: xxx
+          #              nodePort: 31234
           env:
             - name: TEST_ENV
               value: test
-          resources:
-            cpu:
-              required: "60m"
-              limits: "100m"
-            memory:
-              required: "60Mi"
-              limits: "100Mi"
+          config:
+            - path: /test/configfile/config
+              value: test
+  #            - path: /test/secretconfig
+  #              fromSecret:
+  #                name: mysecret
+  #                key: password
   parameters:
     - name: instance-name
-      required: true
       fieldPaths:
         - metadata.name
     - name: image

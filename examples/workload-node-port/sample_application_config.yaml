@@ -1,0 +1,23 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: ApplicationConfiguration
+metadata:
+  name: example-node-port
+spec:
+  components:
+    - componentName: example-component
+      parameterValues:
+        - name: image
+          value: wordpress:php7.2
+      traits:
+        - trait:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: ManualScalerTrait
+            metadata:
+              name: example-appconfig-trait
+            spec:
+              replicaCount: 3
+      scopes:
+        - scopeRef:
+            apiVersion: core.oam.dev/v1alpha2
+            kind: HealthScope
+            name: example-health-scope

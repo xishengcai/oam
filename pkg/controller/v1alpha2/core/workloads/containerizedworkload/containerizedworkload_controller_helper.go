@@ -25,7 +25,7 @@ func (r *Reconciler) renderChildResource(workload *v1alpha2.ContainerizedWorkloa
 		return nil, err
 	}
 
-	if workload.Labels[util.LabelKeyChildResource] == util.KindStatefulSet {
+	if workload.Spec.Type == v1alpha2.StatefulSetWorkloadType {
 		resource = transDepToSts(resource.(*appsv1.Deployment))
 	}
 	if err := ctrl.SetControllerReference(workload, resource, r.Scheme); err != nil {
@@ -87,7 +87,6 @@ func (r *Reconciler) renderService(ctx context.Context,
 	}
 	// the service injector lib doesn't set the namespace and serviceType
 	service.Namespace = workload.Namespace
-	service.Spec.Type = corev1.ServiceTypeClusterIP
 	// k8s server-side patch complains if the protocol is not set
 
 	for index, i := range service.Spec.Ports {

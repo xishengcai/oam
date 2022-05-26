@@ -47,7 +47,7 @@ func main() {
 		"RevisionLimit is the maximum number of revisions that will be maintained. The default value is 50.")
 	flag.BoolVar(&controllerArgs.ApplyOnceOnly, "apply-once-only", false,
 		"For the purpose of some production environment that workload or trait should not be affected if no spec change")
-	flag.DurationVar(&controllerArgs.SyncTime, "sync-time", 60*time.Second, "Set Reconcile exec interval,unit is second")
+	flag.DurationVar(&controllerArgs.SyncTime, "sync-time", 180*time.Second, "Set Reconcile exec interval,unit is second")
 	flag.Parse()
 
 	// use set replace init

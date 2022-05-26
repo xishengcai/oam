@@ -69,7 +69,7 @@ spec:
                             description: It's either PVC or HostPath
                             type: string
                         required:
-                        - name
+                          - name
                         - path
                         type: object
                       type: array

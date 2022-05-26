@@ -35,8 +35,9 @@ import (
 // Reconcile error strings.
 const (
 	errMountVolume = "cannot mount volume"
-	errApplyPVC    = "cannot apply the pvc"
 	waitTime       = time.Second * 60
+	HostPath       = "HostPath"
+	StorageClass   = "StorageClass"
 )
 
 // Setup adds a controller that reconciles ContainerizedWorkload.
@@ -160,6 +161,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		Controller:         newTrue(false),
 		BlockOwnerDeletion: newTrue(true),
 	}
+
 	for _, res := range resources {
 		if res.GetKind() != util.KindStatefulSet && res.GetKind() != util.KindDeployment {
 			continue
@@ -168,7 +170,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 		cpmeta.AddOwnerReference(res, ownerRef)
 		spec, _, _ := unstructured.NestedFieldNoCopy(res.Object, "spec", "template", "spec")
 		oldVolumes := getVolumesFromSpec(spec)
-		volumes := make(map[string]v1.Volume, 0) // 重新构建 volumes
+		volumes := make(map[string]v1.Volume) // 重新构建 volumes
 
 		// volume 是列表， 因为可能有多个容器
 		// 从 sts or deploy中找出容器
@@ -184,16 +186,25 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 					Name:      path.Name,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
+				var volumeClaim oamv1alpha2.VolumeClaim
+				if err := r.Get(ctx, client.ObjectKey{Name: path.PersistentVolumeClaim, Namespace: appConfig.GetNamespace()}, &volumeClaim); err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
 
-				if path.PersistentVolumeClaim != "" {
+				switch volumeClaim.Spec.Type {
+				case HostPath:
 					volumes[path.PersistentVolumeClaim] = v1.Volume{
-						Name:         path.Name,
-						VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: path.PersistentVolumeClaim}},
+						Name: path.PersistentVolumeClaim,
+						VolumeSource: v1.VolumeSource{
+							HostPath: &v1.HostPathVolumeSource{
+								Path: volumeClaim.Spec.HostPath,
+							},
+						},
 					}
-				} else if path.HostPath != nil {
+				case StorageClass:
 					volumes[path.PersistentVolumeClaim] = v1.Volume{
-						Name:         path.Name,
-						VolumeSource: v1.VolumeSource{HostPath: path.HostPath},
+						Name:         path.PersistentVolumeClaim,
+						VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: path.PersistentVolumeClaim}},
 					}
 				}
 			}

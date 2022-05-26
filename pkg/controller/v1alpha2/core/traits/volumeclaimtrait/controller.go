@@ -36,7 +36,6 @@ import (
 const (
 	waitTime         = time.Second * 60
 	reconcileTimeout = time.Second * 60
-	HostPath         = "HostPath"
 	StorageClass     = "StorageClass"
 )
 
@@ -99,16 +98,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// find the resource object to record the event to, default is the parent appConfig.
-	eventObj, err := util.LocateParentAppConfig(ctx, r.Client, &volumeClaim)
-	if eventObj == nil {
-		// fallback to workload itself
-		klog.ErrorS(err, "Failed to find the parent resource", "volumeClaim", volumeClaim.Name)
-		eventObj = &volumeClaim
-	}
-
 	var pvc *v1.PersistentVolumeClaim
-	var pv *v1.PersistentVolume
 
 	size := volumeClaim.Spec.Size
 	if size == "" {
@@ -180,28 +170,6 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			UID:        pvcReturn.UID,
 		},
 	)
-
-	// if type == hostPath, apply
-	if volumeClaim.Spec.Type == HostPath {
-		pvReturn, err := r.clientSet.CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				_, err = r.clientSet.CoreV1().PersistentVolumes().Create(ctx, pv, metav1.CreateOptions{})
-				if err != nil {
-					return ctrl.Result{RequeueAfter: waitTime}, err
-				}
-			}
-		}
-		r.record.Event(&volumeClaim, event.Normal("PV created", fmt.Sprintf("successfully server side create a pv `%s`", pvName)))
-		statusResources = append(statusResources,
-			cpv1alpha1.TypedReference{
-				APIVersion: pvReturn.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-				Kind:       pvReturn.GetObjectKind().GroupVersionKind().Kind,
-				Name:       pvReturn.GetName(),
-				UID:        pvReturn.UID,
-			},
-		)
-	}
 
 	volumeClaim.Status.Resources = statusResources
 	volumeClaimTraitPatch := client.MergeFrom(volumeClaim.DeepCopyObject())

@@ -215,6 +215,9 @@ func TranslateContainerWorkload(w oam.Workload) (oam.Object, error) {
 
 			if p.HostPort > 0 && p.HostPort < 65536 {
 				port.HostPort = p.HostPort
+				d.Spec.Strategy = appsv1.DeploymentStrategy{
+					Type: appsv1.RecreateDeploymentStrategyType,
+				}
 			}
 			kubernetesContainer.Ports = append(kubernetesContainer.Ports, port)
 		}
@@ -330,12 +333,7 @@ func generateConfigMapName(mountPath, wlName, containerName string) (string, err
 }
 
 // TranslateConfigMaps translate non-secret ContainerConfigFile into ConfigMaps
-func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.ConfigMap, error) {
-	cw, ok := w.(*v1alpha2.ContainerizedWorkload)
-	if !ok {
-		return nil, errors.New(errNotContainerizedWorkload)
-	}
-
+func TranslateConfigMaps(_ context.Context, cw *v1alpha2.ContainerizedWorkload) (map[string]*corev1.ConfigMap, error) {
 	newConfigMaps := map[string]*corev1.ConfigMap{}
 	for _, c := range cw.Spec.Containers {
 		for _, cf := range c.ConfigFiles {
@@ -366,7 +364,7 @@ func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.Co
 					},
 				}
 				// pass through label and annotation from the workload to the configmap
-				util.PassLabelAndAnnotation(w, cm)
+				util.PassLabelAndAnnotation(cw, cm)
 				newConfigMaps[cmName] = cm
 			}
 		}
@@ -376,7 +374,7 @@ func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.Co
 
 // ServiceInjector adds a Service object for the first Port on the first
 // Container for the first Deployment observed in a workload translation.
-func ServiceInjector(_ context.Context, w oam.Workload, obj runtime.Object) (*corev1.Service, error) {
+func ServiceInjector(_ context.Context, w *v1alpha2.ContainerizedWorkload, obj runtime.Object) (*corev1.Service, error) {
 	if obj == nil {
 		return nil, nil
 	}
@@ -399,29 +397,19 @@ func ServiceInjector(_ context.Context, w oam.Workload, obj runtime.Object) (*co
 				util.LabelComponentID: w.GetName(),
 				"app":                 w.GetLabels()[util.LabelAppID],
 			},
+
 			Ports: []corev1.ServicePort{},
-			Type:  corev1.ServiceTypeClusterIP,
+			Type:  w.Spec.ServiceType,
 		},
 	}
 
-	var containers []corev1.Container
-	d, ok := obj.(*appsv1.Deployment)
-	if ok {
-		containers = d.Spec.Template.Spec.Containers
-	}
-
-	s, ok := obj.(*appsv1.StatefulSet)
-	if ok {
-		containers = s.Spec.Template.Spec.Containers
-	}
-
-	for index, container := range containers {
+	for index, container := range w.Spec.Containers {
 		for _, c := range container.Ports {
 			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
 				Name:       fmt.Sprintf("cont-%d-%s", index, c.Name),
-				Protocol:   c.Protocol,
-				Port:       c.ContainerPort,
-				TargetPort: intstr.FromInt(int(c.ContainerPort)),
+				Port:       c.Port,
+				TargetPort: intstr.FromInt(int(c.Port)),
+				NodePort:   c.NodePort,
 			})
 		}
 	}
@@ -474,7 +462,7 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 		labels[oam.LabelVersion] = getVersion(*cw.Spec.PointToGrayName)
 	}
 
-	return &appsv1.Deployment{
+	dep := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       deploymentKind,
 			APIVersion: deploymentAPIVersion,
@@ -498,6 +486,13 @@ func renderDeployment(cw *v1alpha2.ContainerizedWorkload) *appsv1.Deployment {
 			},
 		},
 	}
+
+	if cw.Spec.ForceUpdateTimestamp != "" {
+		dep.Spec.Template.Annotations = map[string]string{
+			v1alpha2.ForceUpdateTimestamp: cw.Spec.ForceUpdateTimestamp,
+		}
+	}
+	return &dep
 }
 
 // 如果是灰度组件，需要修改app component id

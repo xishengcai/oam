@@ -38,7 +38,6 @@ func (r *volumeClaims) Render(ctx context.Context, ac *v1alpha2.ApplicationConfi
 // renderVolumeClaims create VolumeClaim
 // 需要校验，如果已经存在则不允许创建
 func (r *volumeClaims) renderVolumeClaims(ctx context.Context, ac *v1alpha2.ApplicationConfiguration, vcc v1alpha2.VolumeClaimConfig) error {
-
 	//name := ac.Name + "-" + vcc.Name
 	name := vcc.Name
 	vc := &v1alpha2.VolumeClaim{
