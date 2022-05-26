@@ -197,26 +197,17 @@ type ContainerConfigFile struct {
 	SubPath bool `json:"subPath,omitempty"`
 }
 
-// A TransportProtocol represents a transport layer protocol.
-type TransportProtocol string
-
-// Transport protocols.
-const (
-	TransportProtocolTCP TransportProtocol = "TCP"
-	TransportProtocolUDP TransportProtocol = "UDP"
-)
-
 // A ContainerPort specifies a port that is exposed by a container.
 type ContainerPort struct {
 	Name string `json:"name"`
 	// Port number. Must be unique within its container.
 	Port int32 `json:"containerPort"`
-	// TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP
+
 	// once we're generating v1 CRDs.
 	// Protocol used by the server listening on this port.
-	// +kubebuilder:validation:Enum=TCP;UDP
+	// +kubebuilder:validation:Enum=TCP;UDP;SCTP
 	// +optional
-	Protocol *TransportProtocol `json:"protocol,omitempty"`
+	Protocol *corev1.Protocol `json:"protocol,omitempty"`
 
 	// Number of port to expose on the host.
 	// If specified, this must be a valid port number, 0 < x < 65536.
@@ -224,6 +215,14 @@ type ContainerPort struct {
 	// Most containers do not need this.
 	// +optional
 	HostPort int32 `json:"hostPort,omitempty" protobuf:"varint,2,opt,name=hostPort"`
+
+	// The port on each node on which this service is exposed when type=NodePort or LoadBalancer.
+	// Usually assigned by the system. If specified, it will be allocated to the service
+	// if unused or else creation of the service will fail.
+	// Default is to auto-allocate a port if the ServiceType of this Service requires one.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+	// +optional
+	NodePort int32 `json:"nodePort,omitempty" protobuf:"varint,5,opt,name=nodePort"`
 }
 
 // An ExecProbe probes a container's health by executing a command.
@@ -410,6 +409,23 @@ type ContainerizedWorkloadSpec struct {
 	// ForceUpdateTimestamp
 	// +optional
 	ForceUpdateTimestamp string `json:"forceUpdateTimestamp,omitempty"`
+
+	// ServiceType determines how the Service is exposed. Defaults to ClusterIP. Valid
+	// options are ExternalName, ClusterIP, NodePort, and LoadBalancer.
+	// "ExternalName" maps to the specified externalName.
+	// "ClusterIP" allocates a cluster-internal IP address for load-balancing to
+	// endpoints. Endpoints are determined by the selector or if that is not
+	// specified, by manual construction of an Endpoints object. If clusterIP is
+	// "None", no virtual IP is allocated and the endpoints are published as a
+	// set of endpoints rather than a stable IP.
+	// "NodePort" builds on ClusterIP and allocates a port on every node which
+	// routes to the clusterIP.
+	// "LoadBalancer" builds on NodePort and creates an
+	// external load-balancer (if supported in the current cloud) which routes
+	// to the clusterIP.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/
+	// +optional
+	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
 }
 
 type Dependency struct {

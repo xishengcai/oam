@@ -723,7 +723,7 @@ func (in *ContainerPort) DeepCopyInto(out *ContainerPort) {
 	*out = *in
 	if in.Protocol != nil {
 		in, out := &in.Protocol, &out.Protocol
-		*out = new(TransportProtocol)
+		*out = new(v1.Protocol)
 		**out = **in
 	}
 }

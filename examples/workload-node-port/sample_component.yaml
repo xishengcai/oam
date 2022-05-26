@@ -1,0 +1,36 @@
+apiVersion: core.oam.dev/v1alpha2
+kind: Component
+metadata:
+  name: example-component
+spec:
+  workload:
+    apiVersion: core.oam.dev/v1alpha2
+    kind: ContainerizedWorkload
+    spec:
+      serviceType: LoadBalancer
+      containers:
+        - name: wordpress
+          image: wordpress:4.6.1-apache
+          ports:
+            - containerPort: 80
+              name: wordpress
+            - containerPort: 81
+              name: xxx
+          #              nodePort: 31234
+          env:
+            - name: TEST_ENV
+              value: test
+          config:
+            - path: /test/configfile/config
+              value: test
+  #            - path: /test/secretconfig
+  #              fromSecret:
+  #                name: mysecret
+  #                key: password
+  parameters:
+    - name: instance-name
+      fieldPaths:
+        - metadata.name
+    - name: image
+      fieldPaths:
+        - spec.containers[0].image

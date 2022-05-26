@@ -333,12 +333,7 @@ func generateConfigMapName(mountPath, wlName, containerName string) (string, err
 }
 
 // TranslateConfigMaps translate non-secret ContainerConfigFile into ConfigMaps
-func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.ConfigMap, error) {
-	cw, ok := w.(*v1alpha2.ContainerizedWorkload)
-	if !ok {
-		return nil, errors.New(errNotContainerizedWorkload)
-	}
-
+func TranslateConfigMaps(_ context.Context, cw *v1alpha2.ContainerizedWorkload) (map[string]*corev1.ConfigMap, error) {
 	newConfigMaps := map[string]*corev1.ConfigMap{}
 	for _, c := range cw.Spec.Containers {
 		for _, cf := range c.ConfigFiles {
@@ -369,7 +364,7 @@ func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.Co
 					},
 				}
 				// pass through label and annotation from the workload to the configmap
-				util.PassLabelAndAnnotation(w, cm)
+				util.PassLabelAndAnnotation(cw, cm)
 				newConfigMaps[cmName] = cm
 			}
 		}
@@ -379,7 +374,7 @@ func TranslateConfigMaps(_ context.Context, w oam.Object) (map[string]*corev1.Co
 
 // ServiceInjector adds a Service object for the first Port on the first
 // Container for the first Deployment observed in a workload translation.
-func ServiceInjector(_ context.Context, w oam.Workload, obj runtime.Object) (*corev1.Service, error) {
+func ServiceInjector(_ context.Context, w *v1alpha2.ContainerizedWorkload, obj runtime.Object) (*corev1.Service, error) {
 	if obj == nil {
 		return nil, nil
 	}
@@ -402,29 +397,19 @@ func ServiceInjector(_ context.Context, w oam.Workload, obj runtime.Object) (*co
 				util.LabelComponentID: w.GetName(),
 				"app":                 w.GetLabels()[util.LabelAppID],
 			},
+
 			Ports: []corev1.ServicePort{},
-			Type:  corev1.ServiceTypeClusterIP,
+			Type:  w.Spec.ServiceType,
 		},
 	}
 
-	var containers []corev1.Container
-	d, ok := obj.(*appsv1.Deployment)
-	if ok {
-		containers = d.Spec.Template.Spec.Containers
-	}
-
-	s, ok := obj.(*appsv1.StatefulSet)
-	if ok {
-		containers = s.Spec.Template.Spec.Containers
-	}
-
-	for index, container := range containers {
+	for index, container := range w.Spec.Containers {
 		for _, c := range container.Ports {
 			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
 				Name:       fmt.Sprintf("cont-%d-%s", index, c.Name),
-				Protocol:   c.Protocol,
-				Port:       c.ContainerPort,
-				TargetPort: intstr.FromInt(int(c.ContainerPort)),
+				Port:       c.Port,
+				TargetPort: intstr.FromInt(int(c.Port)),
+				NodePort:   c.NodePort,
 			})
 		}
 	}
