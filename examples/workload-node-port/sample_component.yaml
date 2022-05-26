@@ -7,7 +7,7 @@ spec:
     apiVersion: core.oam.dev/v1alpha2
     kind: ContainerizedWorkload
     spec:
-      serviceType: LoadBalancer
+      serviceType: ClusterIP
       containers:
         - name: wordpress
           image: wordpress:4.6.1-apache
@@ -16,7 +16,7 @@ spec:
               name: wordpress
             - containerPort: 81
               name: xxx
-          #              nodePort: 31234
+              ##nodePort: 0
           env:
             - name: TEST_ENV
               value: test

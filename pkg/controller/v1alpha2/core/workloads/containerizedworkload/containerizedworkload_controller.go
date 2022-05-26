@@ -200,6 +200,10 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// server side apply the service
 		if err := r.applicator.Apply(ctx, service, applyOpts...); err != nil {
 			klog.ErrorS(err, "Failed to apply a service")
+			delErr := r.Client.Delete(ctx, service)
+			if delErr != nil {
+				klog.ErrorS(delErr, "Failed to delete a service")
+			}
 			r.record.Event(eventObj, event.Warning(errApplyService, err))
 			return util.ReconcileWaitResult,
 				util.PatchCondition(ctx, r, &workload, cpv1alpha1.ReconcileError(errors.Wrap(err, errApplyService)))

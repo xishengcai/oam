@@ -85,16 +85,7 @@ func (r *Reconciler) renderService(ctx context.Context,
 	if service == nil || len(service.Spec.Ports) == 0 {
 		return nil, nil
 	}
-	// the service injector lib doesn't set the namespace and serviceType
 	service.Namespace = workload.Namespace
-	// k8s server-side patch complains if the protocol is not set
-
-	for index, i := range service.Spec.Ports {
-		if i.Protocol == "" {
-			service.Spec.Ports[index].Protocol = corev1.ProtocolTCP
-		}
-	}
-	// always set the controller reference so that we can watch this service and
 	if err := ctrl.SetControllerReference(workload, service, r.Scheme); err != nil {
 		return nil, err
 	}
