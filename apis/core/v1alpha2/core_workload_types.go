@@ -26,16 +26,10 @@ import (
 	"github.com/xishengcai/oam/pkg/oam"
 )
 
-// An OperatingSystem required by a containerised workload.
+// OperatingSystem required by a containerised workload.
 type OperatingSystem string
 
-// Supported operating system types.
-const (
-	OperatingSystemLinux   OperatingSystem = "linux"
-	OperatingSystemWindows OperatingSystem = "windows"
-)
-
-// A CPUArchitecture required by a containerised workload.
+// CPUArchitecture required by a containerised workload.
 type CPUArchitecture string
 
 // Supported architectures
@@ -64,24 +58,20 @@ type SecretKeySelector struct {
 type CPUResources struct {
 	// Required CPU count. 1.0 represents one CPU core.
 	Required resource.Quantity `json:"required"`
-	// Limits describes the maximum amount of compute resources allowed.
-	// More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/
-	// +optional
-	Limits resource.Quantity `json:"limits"`
+	Limits   resource.Quantity `json:"limits,omitempty"`
 }
 
 // MemoryResources required by a container.
 type MemoryResources struct {
 	// Required memory.
 	Required resource.Quantity `json:"required"`
-	Limits   resource.Quantity `json:"limits"`
+	Limits   resource.Quantity `json:"limits,omitempty"`
 }
 
 // GPUResources required by a container.
 type GPUResources struct {
 	// Required GPU count.
 	Required resource.Quantity `json:"required"`
-	Limits   resource.Quantity `json:"limits"`
 }
 
 // DiskResource required by a container.
@@ -190,17 +180,14 @@ type ContainerEnvVar struct {
 // A ContainerConfigFile specifies a configuration file that should be written
 // within a container.
 type ContainerConfigFile struct {
-	// Path within the container at which the configuration file should be
-	// written.
+	// Path within the container at which the configuration file should be written.
 	Path string `json:"path"`
 
 	// Value that should be written to the configuration file.
-	// +optional
-	Value *string `json:"value,omitempty"`
+	Value *string `json:"value"`
 
 	// FromSecret is a secret key reference which can be used to assign a value
-	// to be written to the configuration file at the given path in the
-	// container.
+	// to be written to the configuration file at the given path in the container.
 	// +optional
 	FromSecret *SecretKeySelector `json:"fromSecret,omitempty"`
 
@@ -210,28 +197,32 @@ type ContainerConfigFile struct {
 	SubPath bool `json:"subPath,omitempty"`
 }
 
-// A TransportProtocol represents a transport layer protocol.
-type TransportProtocol string
-
-// Transport protocols.
-const (
-	TransportProtocolTCP TransportProtocol = "TCP"
-	TransportProtocolUDP TransportProtocol = "UDP"
-)
-
 // A ContainerPort specifies a port that is exposed by a container.
 type ContainerPort struct {
 	Name string `json:"name"`
 	// Port number. Must be unique within its container.
 	Port int32 `json:"containerPort"`
-	// TODO(negz): Use +kubebuilder:default marker to default Protocol to TCP
+
 	// once we're generating v1 CRDs.
 	// Protocol used by the server listening on this port.
-	// +kubebuilder:validation:Enum=TCP;UDP
+	// +kubebuilder:validation:Enum=TCP;UDP;SCTP
 	// +optional
-	Protocol *TransportProtocol `json:"protocol,omitempty"`
+	Protocol *corev1.Protocol `json:"protocol,omitempty"`
 
-	HostPort int32 `json:"hostPort,omitempty"`
+	// Number of port to expose on the host.
+	// If specified, this must be a valid port number, 0 < x < 65536.
+	// If HostNetwork is specified, this must match ContainerPort.
+	// Most containers do not need this.
+	// +optional
+	HostPort int32 `json:"hostPort,omitempty" protobuf:"varint,2,opt,name=hostPort"`
+
+	// The port on each node on which this service is exposed when type=NodePort or LoadBalancer.
+	// Usually assigned by the system. If specified, it will be allocated to the service
+	// if unused or else creation of the service will fail.
+	// Default is to auto-allocate a port if the ServiceType of this Service requires one.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+	// +optional
+	NodePort int32 `json:"nodePort,omitempty" protobuf:"varint,5,opt,name=nodePort"`
 }
 
 // An ExecProbe probes a container's health by executing a command.
@@ -364,6 +355,18 @@ type Container struct {
 	ImagePullSecret *string `json:"imagePullSecret,omitempty"`
 }
 
+type WorkloadType string
+
+const (
+	StatefulSetWorkloadType = "statefulset"
+	DeploymentWorkloadType  = "deployment"
+	ServiceWorkloadType     = "service"
+)
+
+const (
+	ForceUpdateTimestamp string = "forceUpdateTimestamp"
+)
+
 // A ContainerizedWorkloadSpec defines the desired state of a
 // ContainerizedWorkload.
 type ContainerizedWorkloadSpec struct {
@@ -386,13 +389,13 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	PointToGrayName *string `json:"pointToGrayName,omitempty"`
 
+	// InitContainers of which this workload initContainers.
+	InitContainers []Container `json:"initContainers,omitempty"`
+
 	// Containers of which this workload consists.
 	Containers []Container `json:"containers"`
 
-	// An ApplicationConfigurationSpec defines the desired state of a
-	InitContainers []Container `json:"initContainers,omitempty"`
-
-	// check is install istio
+	// check add istio label
 	// +optional
 	ServiceMesh bool `json:"serviceMesh"` // 是否开启服务网格
 
@@ -400,14 +403,34 @@ type ContainerizedWorkloadSpec struct {
 	// +optional
 	Dependency []Dependency `json:"dependency,omitempty"`
 
+	// Type support deployment and statefulSet
+	Type WorkloadType `json:"type,omitempty"`
+
 	// ForceUpdateTimestamp
 	// +optional
 	ForceUpdateTimestamp string `json:"forceUpdateTimestamp,omitempty"`
+
+	// ServiceType determines how the Service is exposed. Defaults to ClusterIP. Valid
+	// options are ExternalName, ClusterIP, NodePort, and LoadBalancer.
+	// "ExternalName" maps to the specified externalName.
+	// "ClusterIP" allocates a cluster-internal IP address for load-balancing to
+	// endpoints. Endpoints are determined by the selector or if that is not
+	// specified, by manual construction of an Endpoints object. If clusterIP is
+	// "None", no virtual IP is allocated and the endpoints are published as a
+	// set of endpoints rather than a stable IP.
+	// "NodePort" builds on ClusterIP and allocates a port on every node which
+	// routes to the clusterIP.
+	// "LoadBalancer" builds on NodePort and creates an
+	// external load-balancer (if supported in the current cloud) which routes
+	// to the clusterIP.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/
+	// +optional
+	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
 }
 
 type Dependency struct {
 	// Kind of the referenced object.
-	// +kubebuilder:validation:Enum=HelmRelease;ContainerizedWorkload;
+	// +kubebuilder:validation:Enum=HelmRelease;ContainerizedWorkload;Third
 	Kind string `json:"kind"`
 
 	// Name of the referenced object.
