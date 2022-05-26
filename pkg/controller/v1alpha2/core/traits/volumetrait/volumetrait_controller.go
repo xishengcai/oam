@@ -182,8 +182,8 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 			var volumeMounts []v1.VolumeMount
 			for _, path := range item.Paths {
 				volumeMount := v1.VolumeMount{
-					Name:      path.PersistentVolumeClaim,
 					MountPath: path.Path,
+					Name:      path.Name,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
 				var volumeClaim oamv1alpha2.VolumeClaim
@@ -215,7 +215,7 @@ func (r *Reconcile) mountVolume(ctx context.Context, volumeTrait *oamv1alpha2.Vo
 			if item.IsInitContainer {
 				initContainer, _ := initContainers.([]interface{})[item.ContainerIndex].(map[string]interface{})
 				oldVolumeMounts := getVolumeMountsFromContainer(initContainer)
-				// 找出非pvc,hostPath 的volumeMounts
+				// 找出非pvc,hostPath 的volumeMounts,例如configmap
 				volumeMounts = append(volumeMounts, findConfigVolumes(oldVolumes, oldVolumeMounts)...)
 				initContainer["volumeMounts"] = volumeMounts
 			} else {

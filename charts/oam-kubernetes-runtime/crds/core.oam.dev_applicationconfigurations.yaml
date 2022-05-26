@@ -235,18 +235,16 @@ spec:
               volumeClaims:
                 items:
                   properties:
-                    hostPath:
-                      type: string
                     name:
                       type: string
                     size:
                       type: string
                     storageClassName:
+                      description: HostPath         string `json:"hostPath,omitempty"`
                       type: string
                     type:
                       enum:
-                        - HostPath
-                        - StorageClass
+                      - StorageClass
                       type: string
                   required:
                   - name
@@ -372,9 +370,9 @@ spec:
                           description: UID of the referenced object.
                           type: string
                       required:
-                        - apiVersion
-                        - kind
-                        - name
+                      - apiVersion
+                      - kind
+                      - name
                       type: object
                   type: object
                 type: array
@@ -400,9 +398,9 @@ spec:
                       description: UID of the referenced object.
                       type: string
                   required:
-                    - apiVersion
-                    - kind
-                    - name
+                  - apiVersion
+                  - kind
+                  - name
                   type: object
                 type: array
               status:
