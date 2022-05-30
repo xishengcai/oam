@@ -40,6 +40,8 @@ spec:
                   properties:
                     containerIndex:
                       type: integer
+                    isInitContainer:
+                      type: boolean
                     paths:
                       items:
                         properties:
@@ -65,7 +67,8 @@ spec:
                         type: object
                       type: array
                   required:
-                  - containerIndex
+                    - containerIndex
+                    - isInitContainer
                   - paths
                   type: object
                 type: array
