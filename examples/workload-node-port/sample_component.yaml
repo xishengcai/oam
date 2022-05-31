@@ -7,6 +7,7 @@ spec:
     apiVersion: core.oam.dev/v1alpha2
     kind: ContainerizedWorkload
     spec:
+      forceUpdateTimestamp: 2022-05-31 03:51:49.22334519 +0000 UTC m=+6038.673245278
       serviceType: ClusterIP
       containers:
         - name: wordpress
@@ -16,7 +17,7 @@ spec:
               name: wordpress
             - containerPort: 81
               name: xxx
-              ##nodePort: 0
+              nodePort: 0
           env:
             - name: TEST_ENV
               value: test
