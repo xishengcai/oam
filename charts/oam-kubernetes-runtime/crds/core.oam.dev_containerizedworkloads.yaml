@@ -855,6 +855,10 @@ spec:
               pointToGrayName:
                 description: old grey workload name need modify match selector
                 type: string
+              serviceAnnotation:
+                additionalProperties:
+                  type: string
+                type: object
               serviceMesh:
                 description: check add istio label
                 type: boolean

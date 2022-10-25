@@ -407,6 +407,7 @@ func ServiceInjector(_ context.Context, w *v1alpha2.ContainerizedWorkload, obj r
 		for _, c := range container.Ports {
 			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
 				Name:       fmt.Sprintf("cont-%d-%s", index, c.Name),
+				Protocol:   corev1.ProtocolTCP,
 				Port:       c.Port,
 				TargetPort: intstr.FromInt(int(c.Port)),
 				NodePort:   c.NodePort,

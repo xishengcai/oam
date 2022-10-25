@@ -426,6 +426,8 @@ type ContainerizedWorkloadSpec struct {
 	// More info: https://kubernetes.io/docs/concepts/services-networking/service/
 	// +optional
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
+
+	ServiceAnnotation map[string]string `json:"serviceAnnotation,omitempty"`
 }
 
 type Dependency struct {
