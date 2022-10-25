@@ -86,6 +86,7 @@ func (r *Reconciler) renderService(ctx context.Context,
 		return nil, nil
 	}
 	service.Namespace = workload.Namespace
+	service.Annotations = workload.Spec.ServiceAnnotation
 	if err := ctrl.SetControllerReference(workload, service, r.Scheme); err != nil {
 		return nil, err
 	}
