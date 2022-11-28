@@ -137,7 +137,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			Spec: v1.PersistentVolumeClaimSpec{
 				StorageClassName: &volumeClaim.Spec.StorageClassName,
 				AccessModes: []v1.PersistentVolumeAccessMode{
-					v1.ReadWriteOnce,
+					volumeClaim.Spec.AccessMode,
 				},
 				Resources: v1.ResourceRequirements{
 					Requests: v1.ResourceList{
