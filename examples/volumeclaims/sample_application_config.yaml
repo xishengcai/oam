@@ -28,9 +28,12 @@ spec:
 
   volumeClaims:
     - type: StorageClass
-      storageClassName: hello
+      storageClassName: csi-obs
       name: sc-2
       size: 10Gi
+      #      accessMode: ReadOnlyOnce
+      #      huawei cce obs must use ReadOnlyMany
+      accessMode: ReadOnlyMany
     - type: HostPath
       hostPath: /data/opt/xxx
       name: hp-1
