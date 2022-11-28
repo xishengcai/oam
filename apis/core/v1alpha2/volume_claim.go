@@ -10,9 +10,9 @@ import (
 var _ oam.Object = &VolumeClaim{}
 
 type VolumeClaimSpec struct {
-	// type enum:"HostPath,StorageClass", default is StorageClass
-	Type             string `json:"type,omitempty"`
-	HostPath         string `json:"hostPath,omitempty"`
+	// type enum:"StorageClass", default is StorageClass
+	Type string `json:"type,omitempty"`
+	//HostPath         string `json:"hostPath,omitempty"`
 	StorageClassName string `json:"storageClassName,omitempty"`
 	// type enum:"ReadWriteOnce,ReadOnlyMany,ReadWriteMany"
 	// ReadWriteOnce – the volume can be mounted as read-write by a single node
@@ -61,9 +61,9 @@ type VolumeClaimList struct {
 type VolumeClaimConfig struct {
 	Name string `json:"name"`
 
-	// +kubebuilder:validation:Enum=HostPath;StorageClass
-	Type             string `json:"type,omitempty"`
-	HostPath         string `json:"hostPath,omitempty"`
+	// +kubebuilder:validation:Enum=StorageClass
+	Type string `json:"type,omitempty"`
+	//HostPath         string `json:"hostPath,omitempty"`
 	StorageClassName string `json:"storageClassName,omitempty"`
 	Size             string `json:"size,omitempty"`
 	AccessMode       v1.PersistentVolumeAccessMode `json:"accessMode,omitempty"`

@@ -18,6 +18,7 @@ package v1alpha2
 
 import (
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/xishengcai/oam/pkg/oam"
@@ -41,9 +42,15 @@ type VolumeMountItem struct {
 
 // PathItem define storageClass, size, path, name
 type PathItem struct {
-	Name                  string `json:"name"`
-	PersistentVolumeClaim string `json:"persistentVolumeClaim"`
-	Path                  string `json:"path"`
+	// set volumeMount and volumes link name
+	Name string `json:"name"`
+
+	// Path is the name of directory in container
+	Path string `json:"path"`
+
+	// It's either PVC or HostPath
+	PersistentVolumeClaim string                   `json:"persistentVolumeClaim,omitempty"`
+	HostPath              *v1.HostPathVolumeSource `json:"hostPath,omitempty"`
 }
 
 // A VolumeTraitStatus represents the observed state of a

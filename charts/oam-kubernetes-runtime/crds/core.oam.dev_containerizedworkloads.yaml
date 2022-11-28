@@ -438,16 +438,16 @@ spec:
                     kind:
                       description: Kind of the referenced object.
                       enum:
-                        - HelmRelease
+                      - HelmRelease
                       - ContainerizedWorkload
-                        - Third
+                      - Third
                       type: string
                     name:
                       description: Name of the referenced object.
                       type: string
                   required:
-                    - kind
-                    - name
+                  - kind
+                  - name
                   type: object
                 type: array
               forceUpdateTimestamp:
@@ -483,8 +483,8 @@ spec:
                                 description: The name of the secret.
                                 type: string
                             required:
-                              - key
-                              - name
+                            - key
+                            - name
                             type: object
                           path:
                             description: Path within the container at which the configuration file should be written.
@@ -496,8 +496,8 @@ spec:
                             description: Value that should be written to the configuration file.
                             type: string
                         required:
-                          - path
-                          - value
+                        - path
+                        - value
                         type: object
                       type: array
                     env:
@@ -515,8 +515,8 @@ spec:
                                 description: The name of the secret.
                                 type: string
                             required:
-                              - key
-                              - name
+                            - key
+                            - name
                             type: object
                           name:
                             description: Name of the environment variable. Must be composed of valid Unicode letter and number characters, as well as _ and -.
@@ -526,7 +526,7 @@ spec:
                             description: Value of the environment variable.
                             type: string
                         required:
-                          - name
+                        - name
                         type: object
                       type: array
                     image:
@@ -569,8 +569,8 @@ spec:
                                     description: The header field value
                                     type: string
                                 required:
-                                  - name
-                                  - value
+                                - name
+                                - value
                                 type: object
                               type: array
                             path:
@@ -578,15 +578,15 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                             scheme:
                               description: Scheme to use for connecting to the host. Defaults to HTTP.
                               type: string
                           required:
-                            - port
+                          - port
                           type: object
                         initialDelaySeconds:
                           description: 'Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
@@ -608,12 +608,12 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                           required:
-                            - port
+                          - port
                           type: object
                         timeoutSeconds:
                           description: 'Number of seconds after which the probe times out. Defaults to 1 second. Minimum value is 1. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
@@ -650,8 +650,8 @@ spec:
                               - SCTP
                             type: string
                         required:
-                          - containerPort
-                          - name
+                        - containerPort
+                        - name
                         type: object
                       type: array
                     readinessProbe:
@@ -688,8 +688,8 @@ spec:
                                     description: The header field value
                                     type: string
                                 required:
-                                  - name
-                                  - value
+                                - name
+                                - value
                                 type: object
                               type: array
                             path:
@@ -697,15 +697,15 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                             scheme:
                               description: Scheme to use for connecting to the host. Defaults to HTTP.
                               type: string
                           required:
-                            - port
+                          - port
                           type: object
                         initialDelaySeconds:
                           description: 'Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
@@ -727,12 +727,12 @@ spec:
                               type: string
                             port:
                               anyOf:
-                                - type: integer
-                                - type: string
+                              - type: integer
+                              - type: string
                               description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
                               x-kubernetes-int-or-string: true
                           required:
-                            - port
+                          - port
                           type: object
                         timeoutSeconds:
                           description: 'Number of seconds after which the probe times out. Defaults to 1 second. Minimum value is 1. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
@@ -751,7 +751,7 @@ spec:
                               description: Required CPU count. 1.0 represents one CPU core.
                               type: string
                           required:
-                            - required
+                          - required
                           type: object
                         extended:
                           description: Extended resources required by this container.
@@ -763,13 +763,13 @@ spec:
                                 type: string
                               required:
                                 anyOf:
-                                  - type: integer
-                                  - type: string
+                                - type: integer
+                                - type: string
                                 description: Required extended resource(s), e.g. 8 or "very-cool-widget"
                                 x-kubernetes-int-or-string: true
                             required:
-                              - name
-                              - required
+                            - name
+                            - required
                             type: object
                           type: array
                         gpu:
@@ -779,7 +779,7 @@ spec:
                               description: Required GPU count.
                               type: string
                           required:
-                            - required
+                          - required
                           type: object
                         memory:
                           description: Memory required by this container.
@@ -790,7 +790,7 @@ spec:
                               description: Required memory.
                               type: string
                           required:
-                            - required
+                          - required
                           type: object
                         volumes:
                           description: Volumes required by this container.
@@ -800,8 +800,8 @@ spec:
                               accessMode:
                                 description: AccessMode of this volume; RO (read only) or RW (read and write).
                                 enum:
-                                  - RO
-                                  - RW
+                                - RO
+                                - RW
                                 type: string
                               disk:
                                 description: Disk requirements of this volume.
@@ -813,7 +813,7 @@ spec:
                                     description: Required disk space.
                                     type: string
                                 required:
-                                  - required
+                                - required
                                 type: object
                               mountPath:
                                 description: MountPath at which this volume will be mounted within its container.
@@ -824,21 +824,21 @@ spec:
                               sharingPolicy:
                                 description: SharingPolicy of this volume; Exclusive or Shared.
                                 enum:
-                                  - Exclusive
-                                  - Shared
+                                - Exclusive
+                                - Shared
                                 type: string
                             required:
-                              - mountPath
-                              - name
+                            - mountPath
+                            - name
                             type: object
                           type: array
                       required:
-                        - cpu
-                        - memory
+                      - cpu
+                      - memory
                       type: object
                   required:
-                    - image
-                    - name
+                  - image
+                  - name
                   type: object
                 type: array
               nodeSelector:
@@ -849,8 +849,8 @@ spec:
               osType:
                 description: OperatingSystem required by this workload.
                 enum:
-                  - linux
-                  - windows
+                - linux
+                - windows
                 type: string
               pointToGrayName:
                 description: old grey workload name need modify match selector
@@ -869,7 +869,7 @@ spec:
                 description: Type support deployment and statefulSet
                 type: string
             required:
-              - containers
+            - containers
             type: object
           status:
             description: A ContainerizedWorkloadStatus represents the observed state of a ContainerizedWorkload.

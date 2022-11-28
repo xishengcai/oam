@@ -124,6 +124,7 @@ func (r *Reconcile) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			oam.LabelVolumeClaim: labelName,
 		},
 	}
+
 	// generate pvc
 	switch volumeClaim.Spec.Type {
 	case StorageClass:
