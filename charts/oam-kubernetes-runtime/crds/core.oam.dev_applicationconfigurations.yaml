@@ -235,6 +235,8 @@ spec:
               volumeClaims:
                 items:
                   properties:
+                    accessMode:
+                      type: string
                     hostPath:
                       type: string
                     name:

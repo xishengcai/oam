@@ -34,6 +34,9 @@ spec:
             type: object
           spec:
             properties:
+              accessMode:
+                description: type enum:"ReadWriteOnce,ReadOnlyMany,ReadWriteMany" ReadWriteOnce – the volume can be mounted as read-write by a single node ReadOnlyMany – the volume can be mounted read-only by many nodes ReadWriteMany – the volume can be mounted as read-write by many nodes
+                type: string
               hostPath:
                 type: string
               size:
