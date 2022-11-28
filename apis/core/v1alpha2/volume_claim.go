@@ -3,6 +3,7 @@ package v1alpha2
 import (
 	runtimev1alpha1 "github.com/crossplane/crossplane-runtime/apis/core/v1alpha1"
 	"github.com/xishengcai/oam/pkg/oam"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -13,6 +14,11 @@ type VolumeClaimSpec struct {
 	Type             string `json:"type,omitempty"`
 	HostPath         string `json:"hostPath,omitempty"`
 	StorageClassName string `json:"storageClassName,omitempty"`
+	// type enum:"ReadWriteOnce,ReadOnlyMany,ReadWriteMany"
+	// ReadWriteOnce – the volume can be mounted as read-write by a single node
+	// ReadOnlyMany – the volume can be mounted read-only by many nodes
+	// ReadWriteMany – the volume can be mounted as read-write by many nodes
+	AccessMode       v1.PersistentVolumeAccessMode `json:"accessMode,omitempty"`
 	Size             string `json:"size,omitempty"`
 }
 
@@ -60,4 +66,6 @@ type VolumeClaimConfig struct {
 	HostPath         string `json:"hostPath,omitempty"`
 	StorageClassName string `json:"storageClassName,omitempty"`
 	Size             string `json:"size,omitempty"`
+	AccessMode       v1.PersistentVolumeAccessMode `json:"accessMode,omitempty"`
+
 }
